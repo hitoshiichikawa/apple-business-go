@@ -38,7 +38,7 @@ flowchart LR
 | `configurations` | CRUD（CUSTOM_SETTING、`configurationProfile`=Base64） | ✅ |
 | `auditevents` | List（共通エンベロープ + `eventData` + `Payload`、主要イベント型同梱） | ✅ |
 | データ型 | 全フィールド・列挙値・監査モデルを公式 DocC で確認し、`docs/apple-business-api-datatypes.md` に集約。各 `Attributes` をこれに一致 | ✅ |
-| その他 | examples / CI 雛形 / `CLAUDE.md` / `ROADMAP.md` / `CLAUDE_CODE_PROMPT.md` / `v0.1.0` タグ | ✅ |
+| その他 | examples / CI 雛形 / `docs/dev/CLAUDE.md` / `ROADMAP.md` / `docs/dev/CLAUDE_CODE_PROMPT.md` / `v0.1.0` タグ | ✅ |
 
 > ⚠️ この開発環境に Go ツールチェーンが無く **未ビルド**。ローカルで `go mod tidy && go build ./... && go vet ./...` を最初に通すこと。
 
