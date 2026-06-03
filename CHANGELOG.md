@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Added
+- コミュニティ/運用ファイル: `CONTRIBUTING.md` / `CODE_OF_CONDUCT.md` / Issue・PR テンプレート / Dependabot 設定。
+- `devices` / `people` に godoc Example を追加。
+
 ## [0.3.0] - 2026-06-03
 
 ### Added
