@@ -28,3 +28,7 @@ go.work.sum
 .vscode/
 *.swp
 .DS_Store
+
+# Local Claude Code config: ルートの CLAUDE.md は docs/dev/CLAUDE.md への symlink。
+# ローカルの自動読み込み用で、配布には含めない（本体は docs/dev/CLAUDE.md）。
+/CLAUDE.md
