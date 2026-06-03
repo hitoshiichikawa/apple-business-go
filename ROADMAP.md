@@ -103,7 +103,8 @@ Configurations はセキュリティ/ネットワーク等の設定単位、Blue
 ### 3.5 任意の拡張
 - [ ] 監査イベントの残り `eventData` 型（全33種のうち未型付け分。datatypes.md §4.3 準拠）
 - [ ] `MdmDevice` / `MdmDeviceDetail` のエンドポイント配線（`/v1/mdmServers/{id}/devices` 等、実レスポンス形は要確認）
-- [ ] `brand`（Apple Business Connect 系）/ `support` パッケージ（将来）
+- [ ] `brand`（旧 Apple Business Connect）パッケージ（将来）。実在するが **公開仕様（エンドポイント/データ型/DocC）が無い**。認証も device API と別系統（Service Account ＋ Partner Organization 委譲、Organization/Marketing Administrator ロール）。実装には Onboarding Guide の入手か、委譲設定済み組織での実機確定が前提（2026-06 調査。参考: support.apple.com/guide/business/brands-api-access-abcb4226f877/web）
+- [ ] `support` パッケージ（将来）
 
 ### 3.6 リリース / バージョニング
 - [ ] SemVer（形が固まるまで `v0.x`）。`git push --tags` で公開。**リポジトリ名はモジュールパス `apple-business-go` と一致**させる
