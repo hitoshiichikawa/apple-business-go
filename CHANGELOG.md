@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-03
+
 ### Added
 - `Client.AccessToken()`（認証単体の疎通確認用）。
 - `auditevents`: 残りの `eventData` 型を追加（`AccountRoleLocation`/`AccountRoleLocationChanged`/`ApiAccountRoleLocationChanged`/`ApiAccountKey`/`ApiAccountNameChanged`）＋ `AuditEventType` 定数33種。

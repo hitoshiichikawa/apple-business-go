@@ -1,5 +1,10 @@
 # apple-business-go
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/hitoshiichikawa/apple-business-go.svg)](https://pkg.go.dev/github.com/hitoshiichikawa/apple-business-go)
+[![CI](https://github.com/hitoshiichikawa/apple-business-go/actions/workflows/ci.yml/badge.svg)](https://github.com/hitoshiichikawa/apple-business-go/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/hitoshiichikawa/apple-business-go)](https://goreportcard.com/report/github.com/hitoshiichikawa/apple-business-go)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **Go SDK for Apple Business**（非公式）。Apple Business / School Manager の API
 （`api-business.apple.com` / `api-school.apple.com`）を呼び出すためのライブラリです。
 OAuth2（client_credentials + ES256 JWT）認証、デバイス・ユーザー・MDMサーバ等の取得、
