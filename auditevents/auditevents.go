@@ -138,15 +138,15 @@ type (
 		AccountRoleLocationList []AccountRoleLocation `json:"accountRoleLocationList,omitempty"`
 	}
 	// API_ACCOUNT_ROLE_LOCATION_CHANGED
-	ApiAccountRoleLocationChanged struct {
-		ApiAccountRoleLocationList []AccountRoleLocation `json:"apiAccountRoleLocationList,omitempty"`
+	APIAccountRoleLocationChanged struct {
+		APIAccountRoleLocationList []AccountRoleLocation `json:"apiAccountRoleLocationList,omitempty"`
 	}
 	// API_ACCOUNT_CREATED_WITH_KEY / API_ACCOUNT_KEY_GENERATED / API_ACCOUNT_KEY_REVOKED
-	ApiAccountKey struct {
+	APIAccountKey struct {
 		KeyID string `json:"keyId,omitempty"`
 	}
 	// API_ACCOUNT_NAME_CHANGED
-	ApiAccountNameChanged struct {
+	APIAccountNameChanged struct {
 		NewName string `json:"newName,omitempty"`
 	}
 )
@@ -180,13 +180,13 @@ const (
 	TypeDomainAdded                            = "DOMAIN_ADDED"
 	TypeDomainRemoved                          = "DOMAIN_REMOVED"
 	TypeDomainVerified                         = "DOMAIN_VERIFIED"
-	TypeApiAccountCreatedWithKey               = "API_ACCOUNT_CREATED_WITH_KEY"
-	TypeApiAccountCreatedWithoutKey            = "API_ACCOUNT_CREATED_WITHOUT_KEY"
-	TypeApiAccountDeleted                      = "API_ACCOUNT_DELETED"
-	TypeApiAccountKeyRevoked                   = "API_ACCOUNT_KEY_REVOKED"
-	TypeApiAccountKeyGenerated                 = "API_ACCOUNT_KEY_GENERATED"
-	TypeApiAccountRoleLocationChanged          = "API_ACCOUNT_ROLE_LOCATION_CHANGED"
-	TypeApiAccountNameChanged                  = "API_ACCOUNT_NAME_CHANGED"
+	TypeAPIAccountCreatedWithKey               = "API_ACCOUNT_CREATED_WITH_KEY"
+	TypeAPIAccountCreatedWithoutKey            = "API_ACCOUNT_CREATED_WITHOUT_KEY"
+	TypeAPIAccountDeleted                      = "API_ACCOUNT_DELETED"
+	TypeAPIAccountKeyRevoked                   = "API_ACCOUNT_KEY_REVOKED"
+	TypeAPIAccountKeyGenerated                 = "API_ACCOUNT_KEY_GENERATED"
+	TypeAPIAccountRoleLocationChanged          = "API_ACCOUNT_ROLE_LOCATION_CHANGED"
+	TypeAPIAccountNameChanged                  = "API_ACCOUNT_NAME_CHANGED"
 )
 
 // Service exposes the audit-events endpoint. Construct with New.

@@ -34,7 +34,7 @@ func newClient(t *testing.T, h http.Handler) *applebusiness.Client {
 	t.Helper()
 	api := httptest.NewServer(h)
 	t.Cleanup(api.Close)
-	tok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	tok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"access_token":"t","token_type":"Bearer","expires_in":3600}`))
 	}))

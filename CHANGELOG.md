@@ -14,6 +14,9 @@
 - `examples/smoke-test`: 実トークンでトークン取得＋読み取りAPIを確認するCLI。
 - `examples/dump-all`: 全カテゴリの読み取り専用エンドポイントを順に叩き、生レスポンスを標準出力するCLI（`-limit`/`-only`/`-json`）。
 
+### Changed
+- `auditevents`: 識別子を Go 命名規約に合わせ `Api*` → `API*` にリネーム（型 `APIAccountKey`/`APIAccountNameChanged`/`APIAccountRoleLocationChanged`、定数 `TypeAPIAccount*`、フィールド `APIAccountRoleLocationList`）。golangci-lint(revive var-naming) 対応で、JSON タグ・定数値・API のキー名は不変。
+
 ### Verified
 - `COMPLETED_WITH_ERROR` の一因が「同一 MDM サーバへの再割り当て」であることを確認（状態不変・エラー計上）。docs に注記。
 - 割り当てアクティビティの実値を確認: `status` `IN_PROGRESS`→`COMPLETED`、`subStatus` `COMPLETED_WITH_ERROR`（部分失敗）、`downloadUrl` に CSV ログ。

@@ -102,7 +102,7 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (*Bluep
 	var body writeBody
 	body.Data.Type = resourceType
 	body.Data.ID = id
-	body.Data.Attributes = updateAttrs{Name: in.Name, Description: in.Description}
+	body.Data.Attributes = updateAttrs(in)
 	return applebusiness.Update[Attributes](ctx, s.c, "/v1/blueprints/"+url.PathEscape(id), body)
 }
 

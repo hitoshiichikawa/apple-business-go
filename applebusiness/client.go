@@ -65,7 +65,7 @@ func NewClient(cfg Config, opts ...Option) (*Client, error) {
 
 	// API 呼び出し用トランスポート。WithHTTPClient 指定時はその Transport / Timeout を基盤に使い、
 	// トークン注入（oauth2.Transport）は維持する。
-	var base http.RoundTripper = http.DefaultTransport
+	var base = http.DefaultTransport
 	apiTimeout := 60 * time.Second
 	if o.httpClient != nil {
 		if o.httpClient.Transport != nil {

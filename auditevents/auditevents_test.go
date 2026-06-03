@@ -32,7 +32,7 @@ func newClient(t *testing.T, h http.Handler) *applebusiness.Client {
 	t.Helper()
 	api := httptest.NewServer(h)
 	t.Cleanup(api.Close)
-	tok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	tok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"access_token":"t","token_type":"Bearer","expires_in":3600}`))
 	}))
@@ -127,13 +127,13 @@ func TestListRangeOmitsEndWhenZero(t *testing.T) {
 	}
 }
 
-func TestPayloadApiAccountKey(t *testing.T) {
+func TestPayloadAPIAccountKey(t *testing.T) {
 	const body = `{"data":[{"type":"auditEvents","id":"E2","attributes":{` +
 		`"type":"API_ACCOUNT_CREATED_WITH_KEY",` +
 		`"eventDataPropertyKey":"eventDataApiAccountCreatedWithKey",` +
 		`"eventDataApiAccountCreatedWithKey":{"keyId":"K-123"}` +
 		`}}],"links":{},"meta":{}}`
-	c := newClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(body))
 	}))
@@ -141,10 +141,10 @@ func TestPayloadApiAccountKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(events) != 1 || events[0].Attributes.Type != TypeApiAccountCreatedWithKey {
+	if len(events) != 1 || events[0].Attributes.Type != TypeAPIAccountCreatedWithKey {
 		t.Fatalf("unexpected: %+v", events)
 	}
-	var p ApiAccountKey
+	var p APIAccountKey
 	if err := events[0].Attributes.Payload(&p); err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +159,7 @@ func TestPayloadAccountRoleLocationChanged(t *testing.T) {
 		`"eventDataPropertyKey":"eventDataAccountRoleLocationChanged",` +
 		`"eventDataAccountRoleLocationChanged":{"accountRoleLocationList":[{"roleName":"ADMINISTRATOR","locationUniqueIdentifier":"LOC1"}]}` +
 		`}}],"links":{},"meta":{}}`
-	c := newClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(body))
 	}))

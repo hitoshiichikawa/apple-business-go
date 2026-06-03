@@ -88,7 +88,7 @@ func TestUnassignActivityType(t *testing.T) {
 
 func TestPollActivityUntilTerminal(t *testing.T) {
 	var calls int
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls++
 		st, sub := StatusInProgress, ""
 		if calls >= 2 {

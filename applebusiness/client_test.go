@@ -268,7 +268,7 @@ func TestModifyRelationshipBody(t *testing.T) {
 
 func TestAPIErrorDecodeAndClassifier(t *testing.T) {
 	tok := startTokenServer(t, nil)
-	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		writeJSONResp(t, w, http.StatusNotFound, map[string]any{
 			"errors": []map[string]any{{
 				"status": "404", "code": "NOT_FOUND", "title": "Not Found", "detail": "no such thing",
@@ -293,7 +293,7 @@ func TestAPIErrorDecodeAndClassifier(t *testing.T) {
 func TestRetryThenSuccess(t *testing.T) {
 	tok := startTokenServer(t, nil)
 	var calls int
-	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls++
 		if calls == 1 {
 			w.WriteHeader(http.StatusTooManyRequests)
@@ -320,7 +320,7 @@ func TestRetryThenSuccess(t *testing.T) {
 
 func TestRateLimitedExhausted(t *testing.T) {
 	tok := startTokenServer(t, nil)
-	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Retry-After", "0")
 		w.WriteHeader(http.StatusTooManyRequests)
 	}))
