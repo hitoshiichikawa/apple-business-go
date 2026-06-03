@@ -1,9 +1,11 @@
 // Package auditevents covers the Audit Events category (read-only): /v1/auditEvents.
 //
 // 公式モデル（DocC 確認済み）:
-//   AuditEvent.attributes = 共通エンベロープ AuditEventCommonAttributes
-//     （eventDateTime / type / category / actor* / subject* / outcome / groupId / eventDataPropertyKey）
-//   ＋ イベント固有ペイロード（キー名 = eventDataPropertyKey、例 "eventDataDeviceAssignedToServer"）。
+//
+//	AuditEvent.attributes = 共通エンベロープ AuditEventCommonAttributes
+//	  （eventDateTime / type / category / actor* / subject* / outcome / groupId / eventDataPropertyKey）
+//	＋ イベント固有ペイロード（キー名 = eventDataPropertyKey、例 "eventDataDeviceAssignedToServer"）。
+//
 // 共通項目は型付きで保持し、イベント固有ペイロードは EventData(生JSON) に収集して
 // Payload() で個別型へデコードする。
 package auditevents

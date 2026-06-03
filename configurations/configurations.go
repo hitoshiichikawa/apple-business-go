@@ -37,9 +37,9 @@ const (
 	TypeCustomSetting = "CUSTOM_SETTING"
 
 	// ConfigurationPlatform の全値。
-	PlatformMacOS   = "PLATFORM_MACOS"
-	PlatformIOS     = "PLATFORM_IOS"
-	PlatformTVOS    = "PLATFORM_TVOS"
+	PlatformMacOS    = "PLATFORM_MACOS"
+	PlatformIOS      = "PLATFORM_IOS"
+	PlatformTVOS     = "PLATFORM_TVOS"
 	PlatformVisionOS = "PLATFORM_VISIONOS"
 )
 

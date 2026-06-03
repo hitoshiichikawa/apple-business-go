@@ -27,9 +27,9 @@ const (
 
 // AppAttributes : /v1/apps
 type AppAttributes struct {
-	Name        string `json:"name,omitempty"`
-	BundleID    string `json:"bundleId,omitempty"`
-	Version     string `json:"version,omitempty"`
+	Name        string   `json:"name,omitempty"`
+	BundleID    string   `json:"bundleId,omitempty"`
+	Version     string   `json:"version,omitempty"`
 	SupportedOS []string `json:"supportedOS,omitempty"` // 公式: [SupportedOS]（配列）
 	AppStoreURL string   `json:"appStoreUrl,omitempty"`
 	WebsiteURL  string   `json:"websiteUrl,omitempty"`

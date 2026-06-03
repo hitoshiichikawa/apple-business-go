@@ -208,7 +208,6 @@ func ListSeq[A any](ctx context.Context, c *Client, path string, q url.Values) i
 	}
 }
 
-
 func Get[A any](ctx context.Context, c *Client, path string) (*ResourceObject[A], error) {
 	var resp SingleResponse[A]
 	if err := c.Do(ctx, http.MethodGet, c.baseURL+path, nil, &resp); err != nil {

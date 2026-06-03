@@ -56,8 +56,9 @@ func (s *Service) GetActivity(ctx context.Context, activityID string) (*Activity
 }
 
 // アクティビティのステータス（実APIで観測した値）。
-//   status:    IN_PROGRESS（処理中）→ COMPLETED（完了。部分失敗でも COMPLETED になる）
-//   subStatus: COMPLETED_WITH_ERROR（一部失敗。詳細は downloadUrl の CSV）。全件成功時はおそらく COMPLETED（未観測）。
+//
+//	status:    IN_PROGRESS（処理中）→ COMPLETED（完了。部分失敗でも COMPLETED になる）
+//	subStatus: COMPLETED_WITH_ERROR（一部失敗。詳細は downloadUrl の CSV）。全件成功時はおそらく COMPLETED（未観測）。
 const (
 	StatusInProgress = "IN_PROGRESS"
 	StatusCompleted  = "COMPLETED"

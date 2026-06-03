@@ -110,13 +110,13 @@ type call struct {
 }
 
 type dumper struct {
-	c         *applebusiness.Client
-	ctx       context.Context
-	limit     int
-	jsonMode  bool
-	only      string
-	auditDays int
-	results   []call
+	c              *applebusiness.Client
+	ctx            context.Context
+	limit          int
+	jsonMode       bool
+	only           string
+	auditDays      int
+	results        []call
 	ok, skip, fail int
 }
 
