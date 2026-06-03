@@ -96,7 +96,9 @@
 - `ConfigurationCommon`: `type`(ConfigurationType!), `name`(string), `configuredForPlatforms`([ConfigurationPlatform]),
   `createdDateTime`(date-time), `updatedDateTime`(date-time)
 - `ConfigurationCustomSetting`（CUSTOM_SETTING）: 上記 + `customSettingsValues`(CustomSettingsValues)
-- `CustomSettingsValues`: `configurationProfile`(**byte = Base64 の .mobileconfig**), `filename`(string)
+- `CustomSettingsValues`: `configurationProfile`(.mobileconfig の中身＝**生 XML 文字列**), `filename`(string)
+  - ⚠️ DocC スキーマは `byte`(Base64) と表記するが、**実機は生 XML をそのまま要求**（Base64 化すると 400 `plist type mismatch`）。
+    `PayloadContent` も**非空必須**（空配列は 400）。`examples/write-test` で確認。
 
 ### 補助オブジェクト
 - `UserPhoneNumber`: `phoneNumber`(string), `type`(UserPhoneNumberType)
@@ -201,7 +203,7 @@ attributes = AuditEventCommonAttributes（共通）+ eventData<Event>（イベ�
 |---|---|
 | Type Aliases（列挙） | 文字列定数で定義（例 `configurations.TypeCustomSetting`）。本書を一次情報とする。 |
 | リソース属性 | 各パッケージの `Attributes` 構造体。`OrgDevice`/`User` 等の未充足フィールドは本書から補完可能。 |
-| `CustomSettingsValues.configurationProfile` | `byte`＝Base64。Go では `string` に Base64 を格納。 |
+| `CustomSettingsValues.configurationProfile` | DocC 表記は `byte`(Base64) だが**実機は生 .mobileconfig XML 文字列**を要求（Base64 不可、`PayloadContent` は非空必須）。`string` に生 XML を格納。 |
 | Audit Events | `auditevents.Attributes`（共通エンベロープ型付き）＋ `EventData`（生JSON）。`Payload(&v)` で個別型へ。`DeviceAssignedToServer` 等の型を同梱。 |
 
 > 本書のフィールドは Apple 公式 DocC（`applebusinessapi`）の取得結果に基づく。値の最終確認は公式ページで。

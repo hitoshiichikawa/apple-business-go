@@ -276,7 +276,12 @@ Configurations はセキュリティ/ネットワーク等の設定単位、Blue
   }
 }
 ```
-- `attributes.name` 必須、`description` 任意。`relationships` は任意（後から付け外し可）。
+- `attributes.name` 必須、`description` 任意。
+- ⚠️ **実機（2026-06 時点）では `relationships` も必須**: 「中身」(`apps`/`packages`/`configurations`) と
+  「割り当て先」(`orgDevices`/`users`/`userGroups`) を**各カテゴリ最低1つずつ**指定する必要がある。欠けると 409
+  （中身なし=`MISSING_RESOURCES` / 割り当て先なし=`MISSING_MEMBERS`）。作成と割り当てを分離できない点に注意。`examples/write-test` で確認。
+- ⚠️ `name` はスペース・括弧など不可（英数字・ハイフン等のみ。違反は 409 `ENTITY_ERROR.ATTRIBUTE.INVALID`）。
+  Configuration の `name` はスペース・括弧可で、リソースごとに名前制約が異なる。
 
 **更新** `PATCH /v1/blueprints/{id}` → 200。`data.type` = `blueprints`、`data.id` 必須。`attributes`（`name` / `description`）は変更分のみ。
 
@@ -323,7 +328,8 @@ Configurations はセキュリティ/ネットワーク等の設定単位、Blue
 }
 ```
 - 外側 `data.type` は JSON:API リソース種別 `configurations`、`attributes.type` は構成種別（`CUSTOM_SETTING`）。
-- `CUSTOM_SETTING` では `configurationProfile`（.mobileconfig の中身）と `filename` が必須。
+- `CUSTOM_SETTING` では `configurationProfile`（.mobileconfig の中身＝**生 XML**。Base64 化は不可）と `filename` が必須。
+  `PayloadContent` は**非空**（最低1ペイロード）でないと 400。`examples/write-test` で確認。
 - 更新は `data.id` 指定で変更分の `attributes` を送る（`name` はポインタ＝変更分のみ）。
 
 ### 7.4 SDK へのマッピング（実装予定）

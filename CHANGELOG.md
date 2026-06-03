@@ -7,7 +7,7 @@
 ### Added
 - `Client.AccessToken()`（認証単体の疎通確認用）。
 - `auditevents`: 残りの `eventData` 型を追加（`AccountRoleLocation`/`AccountRoleLocationChanged`/`ApiAccountRoleLocationChanged`/`ApiAccountKey`/`ApiAccountNameChanged`）＋ `AuditEventType` 定数33種。
-- `examples/write-test`: 全書き込みAPIを安全に試すCLI（既定ドライラン、Blueprint/Configuration は自己完結で作成→更新→削除、割り当てはオプトイン＋復元）。
+- `examples/write-test`: 全書き込みAPIを安全に試すCLI（既定ドライラン、実行は `-yes`）。Configuration を先に作成し、その無害な Web クリップ Configuration を Blueprint の中身に流用。Blueprint は実機仕様（中身＋割り当て先の両カテゴリ必須）に対応し、割り当て先は userGroups→users の順で1件のみ一時付与（デバイス直接割り当ては回避）して最後に削除。割り当て(assign)はオプトイン＋復元。
 - 各ドメインパッケージの単体テスト（`devices`/`people`/`apps`/`blueprints`/`configurations`/`auditevents`、`httptest`・テーブル駆動）。
 - `devices.MdmServerDeviceList(serverID)`: MDMサーバ割り当て済みデバイスを relationships のID→各 `orgDevices/{id}` 個別取得でフル取得（related は `GET_RELATED` 不可のため）。
 - `auditevents.ListRange(start, end, q)`: 必須の `filter[startTimestamp]`/`filter[endTimestamp]` を付与して取得。
@@ -22,6 +22,10 @@
 - `mdmServers` は GET_COLLECTION のみ（単体 GET は 403）。`ListMdmServers` のコメントと docs に反映。
 - `auditEvents` は `filter[startTimestamp]` が必須（実APIで確認）。`List` のドキュメントと `ListRange` に反映。
 - OAuth フロー（token端点・aud・iss・ES256・scope・有効期限）を Apple の公開フローと実アサーションで確認し、コメント/ROADMAP を更新。
+- 書き込み4 API を実トークンで確認（`examples/write-test -yes` が 6/6 成功）。判明した実機仕様を docs に反映:
+  - Configuration の `configurationProfile` は **Base64 ではなく生 .mobileconfig XML**（Base64 は 400 `plist type mismatch`）。`PayloadContent` は非空必須。
+  - Blueprint 作成は「中身(apps/packages/configurations)」と「割り当て先(orgDevices/users/userGroups)」を**両カテゴリ最低1つずつ必須**（`reference.md` の「relationships 任意」を訂正）。
+  - Blueprint の `name` はスペース・括弧不可（英数字・ハイフン等のみ）。Configuration の `name` は許容。
 
 ## [0.2.0] - 2026-06-01
 

@@ -23,9 +23,9 @@ package main
 import (
 	"context"
 	"crypto/rand"
-	"encoding/base64"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"time"
 
@@ -33,6 +33,7 @@ import (
 	"github.com/hitoshiichikawa/apple-business-go/blueprints"
 	"github.com/hitoshiichikawa/apple-business-go/configurations"
 	"github.com/hitoshiichikawa/apple-business-go/devices"
+	"github.com/hitoshiichikawa/apple-business-go/people"
 )
 
 func main() {
@@ -94,41 +95,63 @@ func main() {
 	name := "abm-go-write-test-" + time.Now().Format("20060102-150405")
 	fmt.Printf("テスト用リソース名: %s\n\n", name)
 
+	// --- Configurations: Create -> Update（削除は Blueprint の後で後始末）---
+	// configurationProfile は .mobileconfig の中身（生 XML）をそのまま渡す。
+	// 実機では Base64 化すると 400（plist type mismatch）になる（reference.md §7.3 と一致）。
+	// この Configuration は直後の Blueprint の「中身」にも流用する（無害な Web クリップ）。
+	fmt.Println("== Configurations ==")
+	cfgSvc := configurations.New(c)
+	cfg, cerr := cfgSvc.Create(ctx, configurations.CreateInput{
+		Name:                   name,
+		ConfiguredForPlatforms: []string{configurations.PlatformIOS},
+		ConfigurationProfile:   sampleMobileconfig(name),
+		Filename:               name + ".mobileconfig",
+	})
+	report("configurations.Create", cerr)
+	if cerr == nil {
+		_, uerr := cfgSvc.Update(ctx, cfg.ID, configurations.UpdateInput{Name: strptr(name + " (updated)")})
+		report("configurations.Update", uerr)
+	}
+
 	// --- Blueprints: Create -> Update -> (rel) -> Delete ---
-	fmt.Println("== Blueprints ==")
+	// 実機では作成時に「中身(apps/packages/configurations)」と「割り当て先(orgDevices/users/userGroups)」の
+	// 両カテゴリが最低1つずつ必須（reference.md の「任意」は誤り。配信なしでは作成できない）。
+	// 中身は上で作った無害な Web クリップ Configuration を使い、割り当て先は userGroups→users の順で1件だけ
+	// 一時的に付ける（実デバイスへの直接割り当ては避ける）。Blueprint は最後に削除して後始末する。
+	fmt.Println("\n== Blueprints ==")
 	bpSvc := blueprints.New(c)
-	bp, err := bpSvc.Create(ctx, blueprints.CreateInput{Name: name, Description: "apple-business-go write-test"})
-	report("blueprints.Create", err)
-	if err == nil {
-		_, uerr := bpSvc.Update(ctx, bp.ID, blueprints.UpdateInput{Name: strptr(name + " (updated)")})
-		report("blueprints.Update", uerr)
+	if cerr != nil {
+		fmt.Println("⚠ Configuration 作成に失敗したため Blueprint の中身を用意できません。Blueprints をスキップします。")
+	} else if bpIn, targetLabel, hasTarget := pickBlueprintTarget(ctx, c); !hasTarget {
+		fmt.Println("⚠ users/userGroups が1件も無く、Blueprint 作成に必須の割り当て先を用意できません。Blueprints をスキップします。")
+	} else {
+		bpIn.Name = name
+		bpIn.Description = "apple-business-go write-test"
+		bpIn.Configurations = []string{cfg.ID} // 中身＝無害な Web クリップ Configuration
+		fmt.Printf("  中身: configurations:%s（無害な Web クリップ）／ 割り当て先(一時): %s\n", cfg.ID, targetLabel)
+		bp, berr := bpSvc.Create(ctx, bpIn)
+		report("blueprints.Create", berr)
+		if berr == nil {
+			// Blueprint 名は英数字・ハイフン等に限られ、スペースや括弧は 409 ENTITY_ERROR.ATTRIBUTE.INVALID になる
+			// （Configuration 名はスペース・括弧可。リソースごとに名前制約が異なる）。
+			_, uerr := bpSvc.Update(ctx, bp.ID, blueprints.UpdateInput{Name: strptr(name + "-updated")})
+			report("blueprints.Update", uerr)
 
-		if *appID != "" {
-			report("blueprints.AddTo(apps)", bpSvc.AddTo(ctx, bp.ID, blueprints.RelApps, []string{*appID}))
-			report("blueprints.RemoveFrom(apps)", bpSvc.RemoveFrom(ctx, bp.ID, blueprints.RelApps, []string{*appID}))
-		}
+			if *appID != "" {
+				report("blueprints.AddTo(apps)", bpSvc.AddTo(ctx, bp.ID, blueprints.RelApps, []string{*appID}))
+				report("blueprints.RemoveFrom(apps)", bpSvc.RemoveFrom(ctx, bp.ID, blueprints.RelApps, []string{*appID}))
+			}
 
-		if *keep {
-			fmt.Printf("  （-keep のため Blueprint %s は残します）\n", bp.ID)
-		} else {
-			report("blueprints.Delete", bpSvc.Delete(ctx, bp.ID))
+			if *keep {
+				fmt.Printf("  （-keep のため Blueprint %s は残します）\n", bp.ID)
+			} else {
+				report("blueprints.Delete", bpSvc.Delete(ctx, bp.ID))
+			}
 		}
 	}
 
-	// --- Configurations: Create -> Update -> Delete ---
-	fmt.Println("\n== Configurations ==")
-	cfgSvc := configurations.New(c)
-	profile := base64.StdEncoding.EncodeToString([]byte(sampleMobileconfig(name)))
-	cfg, err := cfgSvc.Create(ctx, configurations.CreateInput{
-		Name:                   name,
-		ConfiguredForPlatforms: []string{configurations.PlatformIOS},
-		ConfigurationProfile:   profile, // byte=Base64
-		Filename:               name + ".mobileconfig",
-	})
-	report("configurations.Create", err)
-	if err == nil {
-		_, uerr := cfgSvc.Update(ctx, cfg.ID, configurations.UpdateInput{Name: strptr(name + " (updated)")})
-		report("configurations.Update", uerr)
+	// --- Configuration の後始末（Blueprint が参照し終わった後に削除）---
+	if cerr == nil {
 		if *keep {
 			fmt.Printf("  （-keep のため Configuration %s は残します）\n", cfg.ID)
 		} else {
@@ -175,6 +198,26 @@ func main() {
 	}
 }
 
+// pickBlueprintTarget は Blueprint の割り当て先を1件だけ探す（userGroups→users の順）。
+// 実機では作成時に割り当て先(orgDevices/users/userGroups)が必須。実デバイスへの直接割り当ては
+// 避けるため orgDevices は使わない。全件は辿らず ListSeq で最初の1件だけ取得する（limit=1）。
+func pickBlueprintTarget(ctx context.Context, c *applebusiness.Client) (blueprints.CreateInput, string, bool) {
+	q := url.Values{"limit": {"1"}}
+	for g, err := range applebusiness.ListSeq[people.UserGroupAttributes](ctx, c, "/v1/userGroups", q) {
+		if err != nil {
+			break
+		}
+		return blueprints.CreateInput{UserGroups: []string{g.ID}}, "userGroups:" + g.ID, true
+	}
+	for u, err := range applebusiness.ListSeq[people.UserAttributes](ctx, c, "/v1/users", q) {
+		if err != nil {
+			break
+		}
+		return blueprints.CreateInput{Users: []string{u.ID}}, "users:" + u.ID, true
+	}
+	return blueprints.CreateInput{}, "", false
+}
+
 func pollPrint(ctx context.Context, svc *devices.Service, activityID string) {
 	final, err := svc.PollActivity(ctx, activityID, 3*time.Second)
 	if err != nil {
@@ -187,8 +230,8 @@ func pollPrint(ctx context.Context, svc *devices.Service, activityID string) {
 func printPlan(appID, assignServer, assignDevice string, keep bool) {
 	fmt.Println("=== DRY RUN（無変更）===")
 	fmt.Println("-yes を付けると以下を実行します:")
-	fmt.Println("  Blueprints:     Create → Update" + relNote(appID) + delNote(keep))
 	fmt.Println("  Configurations: Create(CUSTOM_SETTING) → Update" + delNote(keep))
+	fmt.Println("  Blueprints:     中身=上記Configuration＋割り当て先(userGroups/users)1件を一時付与（一瞬配信） → Create → Update" + relNote(appID) + delNote(keep))
 	if assignServer != "" && assignDevice != "" {
 		fmt.Printf("  Devices:        Assign(%s→%s) → 復元(元へ戻す/解除)\n", assignDevice, assignServer)
 	} else {
@@ -211,7 +254,9 @@ func delNote(keep bool) string {
 	return " → Delete"
 }
 
-// sampleMobileconfig は検証用の最小 .mobileconfig（空の Configuration プロファイル）。
+// sampleMobileconfig は検証用の最小 .mobileconfig。
+// 実機の検証は PayloadContent が空（<array/>）だと 400（'PayloadContent' failed on 'gt' tag）になるため、
+// 無害な Web クリップ・ペイロードを1つだけ含める。Configuration 単体テストはどのデバイスにも適用せず即削除する。
 func sampleMobileconfig(name string) string {
 	return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -222,7 +267,18 @@ func sampleMobileconfig(name string) string {
   <key>PayloadIdentifier</key><string>com.example.abmgo.` + name + `</string>
   <key>PayloadUUID</key><string>` + uuid() + `</string>
   <key>PayloadDisplayName</key><string>` + name + `</string>
-  <key>PayloadContent</key><array/>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>PayloadType</key><string>com.apple.webClip.managed</string>
+      <key>PayloadVersion</key><integer>1</integer>
+      <key>PayloadIdentifier</key><string>com.example.abmgo.` + name + `.webclip</string>
+      <key>PayloadUUID</key><string>` + uuid() + `</string>
+      <key>PayloadDisplayName</key><string>abm-go write-test</string>
+      <key>URL</key><string>https://example.com</string>
+      <key>Label</key><string>abm-go write-test</string>
+    </dict>
+  </array>
 </dict>
 </plist>`
 }
