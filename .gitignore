@@ -1,0 +1,30 @@
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+/bin/
+/dist/
+
+# Test / coverage
+*.test
+*.out
+coverage.*
+
+# Go workspace
+go.work
+go.work.sum
+
+# Secrets / local config (NEVER commit ABM private keys)
+.env
+.env.*
+!.env.example
+*.pem
+*.p8
+/secrets/
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store

@@ -1,0 +1,26 @@
+# golangci-lint 設定（控えめな既定 + よく効くものを追加）
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gofmt
+    - goimports
+    - misspell
+    - revive
+    - unconvert
+    - bodyclose
+
+issues:
+  exclude-rules:
+    # examples は説明目的で意図的に変数を使わない箇所がある
+    - path: example_test\.go
+      linters: [revive, staticcheck]
+  max-issues-per-linter: 0
+  max-same-issues: 0

@@ -1,0 +1,114 @@
+package devices
+
+import "github.com/hitoshiichikawa/apple-business-go/applebusiness"
+
+// 型エイリアス（戻り値を簡潔にする）。
+type (
+	Device    = applebusiness.ResourceObject[DeviceAttributes]
+	MdmServer = applebusiness.ResourceObject[MdmServerAttributes]
+	Coverage  = applebusiness.ResourceObject[AppleCareCoverageAttributes]
+	Activity  = applebusiness.ResourceObject[ActivityAttributes]
+)
+
+const (
+	ActivityAssign   = "ASSIGN_DEVICES"
+	ActivityUnassign = "UNASSIGN_DEVICES"
+)
+
+// DeviceAttributes : /v1/orgDevices
+type DeviceAttributes struct {
+	SerialNumber            string   `json:"serialNumber"`
+	DeviceModel             string   `json:"deviceModel"`
+	ProductFamily           string   `json:"productFamily"` // iPhone/iPad/Mac/AppleTV/Watch/Vision
+	ProductType             string   `json:"productType"`
+	Color                   string   `json:"color"`
+	DeviceCapacity          string   `json:"deviceCapacity"`
+	PartNumber              string   `json:"partNumber,omitempty"`
+	OrderNumber             string   `json:"orderNumber,omitempty"`
+	OrderDateTime           string   `json:"orderDateTime,omitempty"`
+	AddedToOrgDateTime      string   `json:"addedToOrgDateTime"`
+	ReleasedFromOrgDateTime string   `json:"releasedFromOrgDateTime,omitempty"`
+	Status                  string   `json:"status"` // ASSIGNED | UNASSIGNED
+	WifiMacAddress          string   `json:"wifiMacAddress,omitempty"`
+	BluetoothMacAddress     string   `json:"bluetoothMacAddress,omitempty"`
+	EthernetMacAddress      []string `json:"ethernetMacAddress,omitempty"`
+	IMEI                    []string `json:"imei,omitempty"`
+	MEID                    []string `json:"meid,omitempty"`
+	EID                     string   `json:"eid,omitempty"`
+	PurchaseSourceID        string   `json:"purchaseSourceId"`
+	PurchaseSourceType      string   `json:"purchaseSourceType"`
+	UpdatedDateTime         string   `json:"updatedDateTime"`
+	ReleaserEntityType      string   `json:"releaserEntityType,omitempty"`
+	ReleaserID              string   `json:"releaserId,omitempty"`
+}
+
+// MdmServerAttributes : /v1/mdmServers と /v1/orgDevices/{id}/assignedServer
+type MdmServerAttributes struct {
+	ServerName      string `json:"serverName"`
+	ServerType      string `json:"serverType"` // MDM | APPLE_CONFIGURATOR | APPLE_MDM
+	CreatedDateTime string `json:"createdDateTime"`
+	UpdatedDateTime string `json:"updatedDateTime"`
+}
+
+// AppleCareCoverageAttributes : /v1/orgDevices/{id}/appleCareCoverage
+type AppleCareCoverageAttributes struct {
+	Status                 string `json:"status,omitempty"`      // AppleCareCoverageStatus: ACTIVE | INACTIVE
+	PaymentType            string `json:"paymentType,omitempty"` // AppleCareCoveragePaymentType: ABE_SUBSCRIPTION | PAID_UP_FRONT | SUBSCRIPTION | NONE
+	Description            string `json:"description,omitempty"`
+	AgreementNumber        string `json:"agreementNumber"`
+	StartDateTime          string `json:"startDateTime"`
+	EndDateTime            string `json:"endDateTime"`
+	ContractCancelDateTime string `json:"contractCancelDateTime"`
+	IsCanceled             bool   `json:"isCanceled"`
+	IsRenewable            bool   `json:"isRenewable"`
+}
+
+// ActivityAttributes : /v1/orgDeviceActivities
+type ActivityAttributes struct {
+	Status            string `json:"status"`
+	SubStatus         string `json:"subStatus"`
+	CreatedDateTime   string `json:"createdDateTime"`
+	CompletedDateTime string `json:"completedDateTime,omitempty"`
+	DownloadURL       string `json:"downloadUrl,omitempty"`
+}
+
+// --- Device Management Services（MDM 配下のデバイス） ---
+
+// MdmDevice : /v1/mdmServers/{id}/devices に紐づく管理対象デバイス。
+type MdmDevice = applebusiness.ResourceObject[MdmDeviceAttributes]
+
+// MdmDeviceAttributes : MdmDevice の属性。
+type MdmDeviceAttributes struct {
+	DeviceName     string `json:"deviceName,omitempty"`
+	EnrolledUserID string `json:"enrolledUserId,omitempty"`
+	ProductFamily  string `json:"productFamily,omitempty"`
+	SerialNumber   string `json:"serialNumber,omitempty"`
+}
+
+// MdmDeviceDetail : 管理対象デバイスの詳細情報。
+type MdmDeviceDetail = applebusiness.ResourceObject[MdmDeviceDetailAttributes]
+
+// MdmDeviceDetailAttributes : MdmDeviceDetail の属性。
+type MdmDeviceDetailAttributes struct {
+	DeviceName          string   `json:"deviceName,omitempty"`
+	DeviceModel         string   `json:"deviceModel,omitempty"`
+	IMEI                []string `json:"imei,omitempty"`
+	BluetoothMacAddress string   `json:"bluetoothMacAddress,omitempty"`
+	EthernetMacAddress  string   `json:"ethernetMacAddress,omitempty"`
+	DeviceEraseStatus   string   `json:"deviceEraseStatus,omitempty"` // NOT_ERASED | ERASED
+	DeviceLockStatus    string   `json:"deviceLockStatus,omitempty"`  // LOCKED | UNLOCKED
+	LostModeStatus      string   `json:"lostModeStatus,omitempty"`    // ENABLED | DISABLED
+	IsFileVaultEnabled  bool     `json:"isFileVaultEnabled,omitempty"`
+	IsFirewallEnabled   bool     `json:"isFirewallEnabled,omitempty"`
+	LastCheckInDateTime string   `json:"lastCheckInDateTime,omitempty"`
+}
+
+// デバイス状態の列挙値（DeviceEraseStatus / DeviceLockStatus / LostModeStatus）。
+const (
+	EraseStatusNotErased = "NOT_ERASED"
+	EraseStatusErased    = "ERASED"
+	LockStatusLocked     = "LOCKED"
+	LockStatusUnlocked   = "UNLOCKED"
+	LostModeEnabled      = "ENABLED"
+	LostModeDisabled     = "DISABLED"
+)
