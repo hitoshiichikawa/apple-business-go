@@ -8,6 +8,10 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore"
+    ignore:
+      # x/oauth2 0.22.0+ は go 1.24/1.25 を要求し、SDK の最低 Go 1.23（range-over-func）を
+      # 超えてしまうため見送る。SDK が go を上げたらこの ignore を外す。
+      - dependency-name: "golang.org/x/oauth2"
 
   # GitHub Actions の更新
   - package-ecosystem: "github-actions"
@@ -16,3 +20,8 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "ci"
+    ignore:
+      # golangci-lint-action v7+ は golangci-lint v2 系で、現行の .golangci.yml(v1 形式) と
+      # 非互換。v6 系（golangci-lint v1）を維持するためメジャー更新を無視する。
+      - dependency-name: "golangci/golangci-lint-action"
+        update-types: ["version-update:semver-major"]
