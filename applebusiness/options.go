@@ -2,7 +2,7 @@ package applebusiness
 
 import "net/http"
 
-// Option は NewClient の挙動を上書きする関数オプション。
+// Option is a functional option that overrides NewClient's behavior.
 type Option func(*options)
 
 type options struct {
@@ -13,7 +13,7 @@ type options struct {
 	httpClient *http.Client
 }
 
-// WithBaseURL は API のベースURLを上書きする（既定は DefaultBusinessBaseURL）。
+// WithBaseURL overrides the API base URL (defaults to DefaultBusinessBaseURL).
 func WithBaseURL(u string) Option {
 	return func(o *options) {
 		if u != "" {
@@ -22,7 +22,7 @@ func WithBaseURL(u string) Option {
 	}
 }
 
-// WithTokenURL は OAuth トークン端点を上書きする（テストや /auth/oauth2/v2/token の指定に使用）。
+// WithTokenURL overrides the OAuth token endpoint (used for tests or to specify /auth/oauth2/v2/token).
 func WithTokenURL(u string) Option {
 	return func(o *options) {
 		if u != "" {
@@ -31,7 +31,7 @@ func WithTokenURL(u string) Option {
 	}
 }
 
-// WithMaxRetries は 429 / 5xx 時のリトライ回数を設定する（0 は既定値の4として扱われる）。
+// WithMaxRetries sets the retry count on 429 / 5xx responses (0 is treated as the default of 4).
 func WithMaxRetries(n int) Option {
 	return func(o *options) {
 		if n > 0 {
@@ -40,15 +40,15 @@ func WithMaxRetries(n int) Option {
 	}
 }
 
-// WithUserAgent は API リクエストの User-Agent ヘッダを設定する。
+// WithUserAgent sets the User-Agent header on API requests.
 func WithUserAgent(s string) Option {
 	return func(o *options) {
 		o.userAgent = s
 	}
 }
 
-// WithHTTPClient は基盤の *http.Client（Transport / Timeout）を指定する。
-// アクセストークンの注入（OAuth2 トランスポート）は維持される。
+// WithHTTPClient sets the underlying *http.Client (Transport / Timeout).
+// Access token injection (the OAuth2 transport) is preserved.
 func WithHTTPClient(hc *http.Client) Option {
 	return func(o *options) {
 		if hc != nil {

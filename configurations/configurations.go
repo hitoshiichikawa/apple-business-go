@@ -10,11 +10,12 @@ import (
 	"github.com/hitoshiichikawa/apple-business-go/applebusiness"
 )
 
-// Configuration はConfigurationリソース。
+// Configuration is a Configuration resource.
 type Configuration = applebusiness.ResourceObject[Attributes]
 
-// Attributes はConfigurationの属性。
-// Type は構成種別（= configurationType）。外側 data.type の "configurations" とは別物。
+// Attributes holds the attributes of a Configuration.
+// Type is the configuration kind (configurationType). It is distinct from the
+// outer data.type value "configurations".
 type Attributes struct {
 	Type                   string                `json:"type,omitempty"` // AIR_DROP / AUTHENTICATION_SCREEN_LOCK / CUSTOM_SETTING ...
 	Name                   string                `json:"name,omitempty"`
@@ -24,19 +25,19 @@ type Attributes struct {
 	UpdatedDateTime        string                `json:"updatedDateTime,omitempty"`
 }
 
-// CustomSettingsValues は CUSTOM_SETTING のときのプロファイル本体。
+// CustomSettingsValues holds the profile payload for a CUSTOM_SETTING configuration.
 type CustomSettingsValues struct {
-	ConfigurationProfile string `json:"configurationProfile,omitempty"` // byte=Base64（.mobileconfig をBase64エンコードした文字列）
+	ConfigurationProfile string `json:"configurationProfile,omitempty"` // byte=Base64 (the .mobileconfig encoded as a Base64 string)
 	Filename             string `json:"filename,omitempty"`
 }
 
 const (
-	// TypeCustomSetting はカスタム構成プロファイルの種別。
-	// ConfigurationType は全23種（AIR_DROP / AUTHENTICATION_SCREEN_LOCK / CERTIFICATE / FILE_VAULT /
-	// SOFTWARE_UPDATE / VPN / WIFI / WEB_CLIP / ... ）。詳細は docs/apple-business-api-datatypes.md §1。
+	// TypeCustomSetting is the kind for a custom configuration profile.
+	// ConfigurationType has 23 values in total (AIR_DROP / AUTHENTICATION_SCREEN_LOCK / CERTIFICATE / FILE_VAULT /
+	// SOFTWARE_UPDATE / VPN / WIFI / WEB_CLIP / ...). See docs/apple-business-api-datatypes.md §1 for details.
 	TypeCustomSetting = "CUSTOM_SETTING"
 
-	// ConfigurationPlatform の全値。
+	// All values of ConfigurationPlatform.
 	PlatformMacOS    = "PLATFORM_MACOS"
 	PlatformIOS      = "PLATFORM_IOS"
 	PlatformTVOS     = "PLATFORM_TVOS"
@@ -45,7 +46,7 @@ const (
 
 const resourceType = "configurations"
 
-// Service はConfiguration関連エンドポイントを提供する。New で生成。
+// Service provides the Configuration-related endpoints. Create it with New.
 type Service struct {
 	c *applebusiness.Client
 }
@@ -60,17 +61,17 @@ func (s *Service) Get(ctx context.Context, id string) (*Configuration, error) {
 	return applebusiness.Get[Attributes](ctx, s.c, "/v1/configurations/"+url.PathEscape(id))
 }
 
-// CreateInput はConfiguration作成パラメータ。
-// CUSTOM_SETTING を作る場合は ConfigurationProfile と Filename が必須。
+// CreateInput holds the parameters for creating a Configuration.
+// When creating a CUSTOM_SETTING, ConfigurationProfile and Filename are required.
 type CreateInput struct {
-	Type                   string // 空なら CUSTOM_SETTING
+	Type                   string // defaults to CUSTOM_SETTING when empty
 	Name                   string
 	ConfiguredForPlatforms []string
 	ConfigurationProfile   string // .mobileconfig XML
 	Filename               string
 }
 
-// Create は新しいConfigurationを作成する（POST /v1/configurations）。
+// Create creates a new Configuration (POST /v1/configurations).
 func (s *Service) Create(ctx context.Context, in CreateInput) (*Configuration, error) {
 	t := in.Type
 	if t == "" {
@@ -93,7 +94,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Configuration, e
 	return applebusiness.Create[Attributes](ctx, s.c, "/v1/configurations", body)
 }
 
-// UpdateInput は変更する属性のみを指定する（nil/空は据え置き）。
+// UpdateInput specifies only the attributes to change (nil or empty leaves them unchanged).
 type UpdateInput struct {
 	Name                   *string
 	ConfiguredForPlatforms []string
@@ -101,7 +102,7 @@ type UpdateInput struct {
 	Filename               *string
 }
 
-// Update はConfigurationを更新する（PATCH /v1/configurations/{id}）。
+// Update updates a Configuration (PATCH /v1/configurations/{id}).
 func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (*Configuration, error) {
 	var attrs updateAttrs
 	attrs.Name = in.Name
@@ -123,7 +124,7 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (*Confi
 	return applebusiness.Update[Attributes](ctx, s.c, "/v1/configurations/"+url.PathEscape(id), body)
 }
 
-// Delete はConfigurationを削除する（DELETE /v1/configurations/{id}）。
+// Delete deletes a Configuration (DELETE /v1/configurations/{id}).
 func (s *Service) Delete(ctx context.Context, id string) error {
 	return applebusiness.Delete(ctx, s.c, "/v1/configurations/"+url.PathEscape(id))
 }

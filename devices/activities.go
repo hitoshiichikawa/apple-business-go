@@ -28,7 +28,8 @@ type activityCreate struct {
 }
 
 // Assign assigns devices to an MDM server. Poll the returned Activity for completion.
-// 注意: 既に同じサーバへ割り当て済みのデバイスを指定すると、その分は subStatus=COMPLETED_WITH_ERROR となる（状態は不変）。
+// Note: specifying devices already assigned to the same server yields
+// subStatus=COMPLETED_WITH_ERROR for those (their state is unchanged).
 func (s *Service) Assign(ctx context.Context, serverID string, deviceIDs []string) (*Activity, error) {
 	return s.createActivity(ctx, ActivityAssign, serverID, deviceIDs)
 }
@@ -55,16 +56,16 @@ func (s *Service) GetActivity(ctx context.Context, activityID string) (*Activity
 	return applebusiness.Get[ActivityAttributes](ctx, s.c, "/v1/orgDeviceActivities/"+url.PathEscape(activityID))
 }
 
-// アクティビティのステータス（実APIで観測した値）。
+// Activity statuses (values observed against the live API).
 //
-//	status:    IN_PROGRESS（処理中）→ COMPLETED（完了。部分失敗でも COMPLETED になる）
-//	subStatus: COMPLETED_WITH_ERROR（一部失敗。詳細は downloadUrl の CSV）。全件成功時はおそらく COMPLETED（未観測）。
+//	status:    IN_PROGRESS (processing) -> COMPLETED (done; COMPLETED even on partial failure)
+//	subStatus: COMPLETED_WITH_ERROR (some failed; see the CSV at downloadUrl). On full success it is presumably COMPLETED (not observed).
 const (
 	StatusInProgress = "IN_PROGRESS"
 	StatusCompleted  = "COMPLETED"
 
-	SubStatusCompleted          = "COMPLETED"            // 推定: 全件成功（未観測）
-	SubStatusCompletedWithError = "COMPLETED_WITH_ERROR" // 観測: 一部失敗
+	SubStatusCompleted          = "COMPLETED"            // presumed: all succeeded (not observed)
+	SubStatusCompletedWithError = "COMPLETED_WITH_ERROR" // observed: some failed
 )
 
 // inProgressStatuses は「処理中（非終了）」とみなす status。
@@ -83,7 +84,7 @@ func isTerminalStatus(status string) bool {
 }
 
 // PollActivity polls until a terminal status or ctx cancellation.
-// 完了でも subStatus が COMPLETED_WITH_ERROR の場合は一部失敗（downloadUrl の CSV を確認）。
+// Even when completed, a subStatus of COMPLETED_WITH_ERROR means some items failed (check the CSV at downloadUrl).
 func (s *Service) PollActivity(ctx context.Context, activityID string, interval time.Duration) (*Activity, error) {
 	if interval <= 0 {
 		interval = 3 * time.Second

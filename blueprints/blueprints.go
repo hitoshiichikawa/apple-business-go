@@ -14,10 +14,10 @@ import (
 	"github.com/hitoshiichikawa/apple-business-go/applebusiness"
 )
 
-// Blueprint はBlueprintリソース。
+// Blueprint is a Blueprint resource.
 type Blueprint = applebusiness.ResourceObject[Attributes]
 
-// Attributes はBlueprintの属性。
+// Attributes holds the attributes of a Blueprint.
 type Attributes struct {
 	Name                string `json:"name,omitempty"`
 	Description         string `json:"description,omitempty"`
@@ -27,7 +27,7 @@ type Attributes struct {
 	UpdatedDateTime     string `json:"updatedDateTime,omitempty"`
 }
 
-// リレーション名（= 各要素の type と同じ）。
+// Relationship names (each is identical to the type of its members).
 const (
 	RelApps           = "apps"
 	RelConfigurations = "configurations"
@@ -37,7 +37,7 @@ const (
 	RelUserGroups     = "userGroups"
 )
 
-// BlueprintStatus の値。
+// Values of BlueprintStatus.
 const (
 	StatusActive      = "ACTIVE"
 	StatusToBeDeleted = "TO_BE_DELETED"
@@ -45,7 +45,7 @@ const (
 
 const resourceType = "blueprints"
 
-// Service はBlueprint関連エンドポイントを提供する。New で生成。
+// Service provides the Blueprint-related endpoints. Create it with New.
 type Service struct {
 	c *applebusiness.Client
 }
@@ -62,15 +62,17 @@ func (s *Service) Get(ctx context.Context, id string) (*Blueprint, error) {
 	return applebusiness.Get[Attributes](ctx, s.c, "/v1/blueprints/"+url.PathEscape(id))
 }
 
-// RelationshipIDs は指定リレーションの関連リソースID一覧を返す（全ページ）。
-// rel は Rel* 定数を使う。注: 権限/状態により 403 になり得る。
+// RelationshipIDs returns the IDs of the related resources in the given
+// relationship (all pages). Use a Rel* constant for rel. Note: this may
+// return 403 depending on permissions or state.
 func (s *Service) RelationshipIDs(ctx context.Context, id, rel string) ([]applebusiness.Data, error) {
 	return applebusiness.Relationship(ctx, s.c, "/v1/blueprints/"+url.PathEscape(id)+"/relationships/"+rel)
 }
 
 // --- 書き込み ---------------------------------------------------------------
 
-// CreateInput はBlueprint作成パラメータ。各リレーションIDは任意（後から付け外し可）。
+// CreateInput holds the parameters for creating a Blueprint. Each relationship
+// ID is optional (members can be added or removed later).
 type CreateInput struct {
 	Name           string
 	Description    string
@@ -82,7 +84,7 @@ type CreateInput struct {
 	UserGroups     []string
 }
 
-// Create は新しいBlueprintを作成する（POST /v1/blueprints）。
+// Create creates a new Blueprint (POST /v1/blueprints).
 func (s *Service) Create(ctx context.Context, in CreateInput) (*Blueprint, error) {
 	var body writeBody
 	body.Data.Type = resourceType
@@ -91,13 +93,13 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Blueprint, error
 	return applebusiness.Create[Attributes](ctx, s.c, "/v1/blueprints", body)
 }
 
-// UpdateInput は変更する属性のみを指定する（nil は据え置き）。
+// UpdateInput specifies only the attributes to change (nil leaves them unchanged).
 type UpdateInput struct {
 	Name        *string
 	Description *string
 }
 
-// Update はBlueprintの属性を更新する（PATCH /v1/blueprints/{id}）。
+// Update updates the attributes of a Blueprint (PATCH /v1/blueprints/{id}).
 func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (*Blueprint, error) {
 	var body writeBody
 	body.Data.Type = resourceType
@@ -106,22 +108,22 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (*Bluep
 	return applebusiness.Update[Attributes](ctx, s.c, "/v1/blueprints/"+url.PathEscape(id), body)
 }
 
-// Delete はBlueprintを削除する（DELETE /v1/blueprints/{id}）。
+// Delete deletes a Blueprint (DELETE /v1/blueprints/{id}).
 func (s *Service) Delete(ctx context.Context, id string) error {
 	return applebusiness.Delete(ctx, s.c, "/v1/blueprints/"+url.PathEscape(id))
 }
 
-// AddTo はリレーションに関連リソースを追加する（POST）。rel は Rel* 定数。
+// AddTo adds related resources to a relationship (POST). rel is a Rel* constant.
 func (s *Service) AddTo(ctx context.Context, id, rel string, ids []string) error {
 	return s.modifyRel(ctx, http.MethodPost, id, rel, ids)
 }
 
-// RemoveFrom はリレーションから関連リソースを削除する（DELETE）。
+// RemoveFrom removes related resources from a relationship (DELETE).
 func (s *Service) RemoveFrom(ctx context.Context, id, rel string, ids []string) error {
 	return s.modifyRel(ctx, http.MethodDelete, id, rel, ids)
 }
 
-// Replace はリレーションの集合を置換する（PATCH）。
+// Replace replaces the set of members in a relationship (PATCH).
 func (s *Service) Replace(ctx context.Context, id, rel string, ids []string) error {
 	return s.modifyRel(ctx, http.MethodPatch, id, rel, ids)
 }

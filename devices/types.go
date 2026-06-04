@@ -2,7 +2,7 @@ package devices
 
 import "github.com/hitoshiichikawa/apple-business-go/applebusiness"
 
-// 型エイリアス（戻り値を簡潔にする）。
+// Type aliases (keep return types concise).
 type (
 	Device    = applebusiness.ResourceObject[DeviceAttributes]
 	MdmServer = applebusiness.ResourceObject[MdmServerAttributes]
@@ -42,7 +42,7 @@ type DeviceAttributes struct {
 	ReleaserID              string   `json:"releaserId,omitempty"`
 }
 
-// MdmServerAttributes : /v1/mdmServers と /v1/orgDevices/{id}/assignedServer
+// MdmServerAttributes : /v1/mdmServers and /v1/orgDevices/{id}/assignedServer
 type MdmServerAttributes struct {
 	ServerName      string `json:"serverName"`
 	ServerType      string `json:"serverType"` // MDM | APPLE_CONFIGURATOR | APPLE_MDM
@@ -72,12 +72,12 @@ type ActivityAttributes struct {
 	DownloadURL       string `json:"downloadUrl,omitempty"`
 }
 
-// --- Device Management Services（MDM 配下のデバイス） ---
+// --- Device Management Services (devices under an MDM) ---
 
-// MdmDevice : /v1/mdmServers/{id}/devices に紐づく管理対象デバイス。
+// MdmDevice is a managed device linked under /v1/mdmServers/{id}/devices.
 type MdmDevice = applebusiness.ResourceObject[MdmDeviceAttributes]
 
-// MdmDeviceAttributes : MdmDevice の属性。
+// MdmDeviceAttributes holds the attributes of an MdmDevice.
 type MdmDeviceAttributes struct {
 	DeviceName     string `json:"deviceName,omitempty"`
 	EnrolledUserID string `json:"enrolledUserId,omitempty"`
@@ -85,10 +85,10 @@ type MdmDeviceAttributes struct {
 	SerialNumber   string `json:"serialNumber,omitempty"`
 }
 
-// MdmDeviceDetail : 管理対象デバイスの詳細情報。
+// MdmDeviceDetail holds the detailed information of a managed device.
 type MdmDeviceDetail = applebusiness.ResourceObject[MdmDeviceDetailAttributes]
 
-// MdmDeviceDetailAttributes : MdmDeviceDetail の属性。
+// MdmDeviceDetailAttributes holds the attributes of an MdmDeviceDetail.
 type MdmDeviceDetailAttributes struct {
 	DeviceName          string   `json:"deviceName,omitempty"`
 	DeviceModel         string   `json:"deviceModel,omitempty"`
@@ -103,7 +103,7 @@ type MdmDeviceDetailAttributes struct {
 	LastCheckInDateTime string   `json:"lastCheckInDateTime,omitempty"`
 }
 
-// デバイス状態の列挙値（DeviceEraseStatus / DeviceLockStatus / LostModeStatus）。
+// Device-state enumeration values (DeviceEraseStatus / DeviceLockStatus / LostModeStatus).
 const (
 	EraseStatusNotErased = "NOT_ERASED"
 	EraseStatusErased    = "ERASED"

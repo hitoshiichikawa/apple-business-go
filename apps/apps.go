@@ -14,7 +14,7 @@ type (
 	Package = applebusiness.ResourceObject[PackageAttributes]
 )
 
-// SupportedOS の値（App.SupportedOS の要素）。
+// SupportedOS values (elements of App.SupportedOS).
 const (
 	OSUnspecified = "SUPPORTED_OS_UNSPECIFIED"
 	OSIPadOS      = "SUPPORTED_OS_IPADOS"
@@ -30,7 +30,7 @@ type AppAttributes struct {
 	Name        string   `json:"name,omitempty"`
 	BundleID    string   `json:"bundleId,omitempty"`
 	Version     string   `json:"version,omitempty"`
-	SupportedOS []string `json:"supportedOS,omitempty"` // 公式: [SupportedOS]（配列）
+	SupportedOS []string `json:"supportedOS,omitempty"` // official: [SupportedOS] (array)
 	AppStoreURL string   `json:"appStoreUrl,omitempty"`
 	WebsiteURL  string   `json:"websiteUrl,omitempty"`
 	IsCustomApp bool     `json:"isCustomApp,omitempty"`

@@ -49,13 +49,13 @@ type UserGroupAttributes struct {
 	UpdatedDateTime  string `json:"updatedDateTime,omitempty"`
 }
 
-// UserGroupType の値。
+// UserGroupType values.
 const (
 	UserGroupStandard = "STANDARD"
 	UserGroupSmart    = "SMART"
 )
 
-// UserStatus の値。
+// UserStatus values.
 const (
 	UserStatusNew              = "NEW"
 	UserStatusReleased         = "RELEASED"

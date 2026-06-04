@@ -38,21 +38,24 @@ func (s *Service) AppleCareCoverage(ctx context.Context, deviceID string) (*Cove
 }
 
 // ListMdmServers returns all MDM servers (device management services).
-// 注意: mdmServers は GET_COLLECTION のみ許可。単体取得 (GET /v1/mdmServers/{id}) は 403 になるため提供しない。
-// 各サーバの属性は一覧の各要素 (MdmServer.Attributes) に含まれる。
+// Note: mdmServers only allows GET_COLLECTION. Fetching a single server
+// (GET /v1/mdmServers/{id}) returns 403, so it is not provided. Each server's
+// attributes are included in the list elements (MdmServer.Attributes).
 func (s *Service) ListMdmServers(ctx context.Context, q url.Values) ([]MdmServer, error) {
 	return applebusiness.List[MdmServerAttributes](ctx, s.c, "/v1/mdmServers", q)
 }
 
 // MdmServerDevices returns the linkage (assigned device IDs, type "orgDevices") for an MDM server (all pages).
-// これがメンバーシップ取得の唯一の手段（related の GET_RELATED は不可）。フル属性は MdmServerDeviceList を使う。
+// This is the only way to obtain membership (GET_RELATED on the related link is
+// not allowed). Use MdmServerDeviceList for the full attributes.
 func (s *Service) MdmServerDevices(ctx context.Context, serverID string) ([]applebusiness.Data, error) {
 	return applebusiness.Relationship(ctx, s.c, "/v1/mdmServers/"+url.PathEscape(serverID)+"/relationships/devices")
 }
 
 // MdmServerDeviceList returns the full organization-device objects assigned to an MDM server.
-// 注意: related エンドポイント /v1/mdmServers/{id}/devices は GET_RELATED 不可（403, allowed: GET_RELATIONSHIP）。
-// そのため relationships で得たID（type=orgDevices）ごとに /v1/orgDevices/{id} を個別取得する（N+1 リクエスト）。
+// Note: the related endpoint /v1/mdmServers/{id}/devices does not allow GET_RELATED
+// (403, allowed: GET_RELATIONSHIP). It therefore fetches /v1/orgDevices/{id}
+// individually for each ID (type=orgDevices) obtained from the relationship (N+1 requests).
 func (s *Service) MdmServerDeviceList(ctx context.Context, serverID string) ([]Device, error) {
 	ids, err := s.MdmServerDevices(ctx, serverID)
 	if err != nil {

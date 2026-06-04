@@ -2,24 +2,24 @@ package applebusiness
 
 import "errors"
 
-// 型付きエラー判定。いずれも err（またはラップされたもの）が *APIError で、
-// 対応する HTTP ステータスの場合に true を返す。
+// Typed error predicates. Each returns true when err (or a wrapped error) is an
+// *APIError with the corresponding HTTP status.
 //
 //	if applebusiness.IsNotFound(err) { ... }
 
-// IsNotFound は 404 を判定する。
+// IsNotFound reports whether err is a 404.
 func IsNotFound(err error) bool { return statusIs(err, 404) }
 
-// IsRateLimited は 429 を判定する（リトライ枯渇時の戻り値も含む）。
+// IsRateLimited reports whether err is a 429 (including the value returned when retries are exhausted).
 func IsRateLimited(err error) bool { return statusIs(err, 429) }
 
-// IsUnauthorized は 401 を判定する。
+// IsUnauthorized reports whether err is a 401.
 func IsUnauthorized(err error) bool { return statusIs(err, 401) }
 
-// IsForbidden は 403 を判定する（relationships の権限不足などで発生し得る）。
+// IsForbidden reports whether err is a 403 (which can occur, e.g., on insufficient relationship permissions).
 func IsForbidden(err error) bool { return statusIs(err, 403) }
 
-// IsConflict は 409 を判定する。
+// IsConflict reports whether err is a 409.
 func IsConflict(err error) bool { return statusIs(err, 409) }
 
 func statusIs(err error, code int) bool {

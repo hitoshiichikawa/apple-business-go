@@ -1,13 +1,13 @@
 // Package auditevents covers the Audit Events category (read-only): /v1/auditEvents.
 //
-// 公式モデル（DocC 確認済み）:
+// Official model (confirmed against the DocC):
 //
-//	AuditEvent.attributes = 共通エンベロープ AuditEventCommonAttributes
-//	  （eventDateTime / type / category / actor* / subject* / outcome / groupId / eventDataPropertyKey）
-//	＋ イベント固有ペイロード（キー名 = eventDataPropertyKey、例 "eventDataDeviceAssignedToServer"）。
+//	AuditEvent.attributes = the common envelope AuditEventCommonAttributes
+//	  (eventDateTime / type / category / actor* / subject* / outcome / groupId / eventDataPropertyKey)
+//	plus an event-specific payload (key name = eventDataPropertyKey, e.g. "eventDataDeviceAssignedToServer").
 //
-// 共通項目は型付きで保持し、イベント固有ペイロードは EventData(生JSON) に収集して
-// Payload() で個別型へデコードする。
+// The common fields are kept as typed values, while the event-specific payload is collected into
+// EventData (raw JSON) and decoded into a concrete type via Payload().
 package auditevents
 
 import (
@@ -20,10 +20,10 @@ import (
 	"github.com/hitoshiichikawa/apple-business-go/applebusiness"
 )
 
-// AuditEvent は監査イベントリソース（type / id / attributes）。
+// AuditEvent is an audit-event resource (type / id / attributes).
 type AuditEvent = applebusiness.ResourceObject[Attributes]
 
-// Attributes は監査イベントの属性（共通エンベロープ + イベント固有ペイロード）。
+// Attributes holds the audit-event attributes (the common envelope plus the event-specific payload).
 type Attributes struct {
 	EventDateTime        string `json:"eventDateTime,omitempty"`
 	Type                 string `json:"type,omitempty"`     // AuditEventType
@@ -38,11 +38,11 @@ type Attributes struct {
 	GroupID              string `json:"groupId,omitempty"`
 	EventDataPropertyKey string `json:"eventDataPropertyKey,omitempty"`
 
-	// EventData はイベント固有ペイロードの生JSON。キーは "eventData..."（通常 EventDataPropertyKey と一致）。
+	// EventData holds the raw JSON of the event-specific payload. Keys are "eventData..." (usually matching EventDataPropertyKey).
 	EventData map[string]json.RawMessage `json:"-"`
 }
 
-// UnmarshalJSON は共通フィールドをデコードしつつ、"eventData..." キーを EventData に収集する。
+// UnmarshalJSON decodes the common fields while collecting the "eventData..." keys into EventData.
 func (a *Attributes) UnmarshalJSON(b []byte) error {
 	type alias Attributes // メソッドを持たない別名で再帰を回避
 	var base alias
@@ -65,7 +65,7 @@ func (a *Attributes) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// Payload はイベント固有ペイロードを v にデコードする（EventDataPropertyKey のキーを使用）。
+// Payload decodes the event-specific payload into v (using the key in EventDataPropertyKey).
 func (a *Attributes) Payload(v any) error {
 	key := a.EventDataPropertyKey
 	if key == "" {
@@ -81,7 +81,8 @@ func (a *Attributes) Payload(v any) error {
 	return json.Unmarshal(raw, v)
 }
 
-// イベント固有ペイロードの型（公式 DocC 準拠）。複数イベントで形が同じものは共通化。
+// Event-specific payload types (per the official DocC). Payloads with the same shape across
+// multiple events are shared.
 type (
 	// DEVICE_ADDED_TO_ORG
 	DeviceAddedToOrg struct {
@@ -125,13 +126,13 @@ type (
 	}
 )
 
-// AccountRoleLocation はロール/ロケーションの組（AuditEventAccountRoleLocation）。
+// AccountRoleLocation is a role/location pair (AuditEventAccountRoleLocation).
 type AccountRoleLocation struct {
 	RoleName                 string `json:"roleName,omitempty"`
 	LocationUniqueIdentifier string `json:"locationUniqueIdentifier,omitempty"`
 }
 
-// 追加のイベント固有ペイロード（DocC 準拠）。
+// Additional event-specific payloads (per the DocC).
 type (
 	// ACCOUNT_ROLE_LOCATION_CHANGED
 	AccountRoleLocationChanged struct {
@@ -151,8 +152,8 @@ type (
 	}
 )
 
-// AuditEventType の全値（33種）。Attributes.Type と比較して分岐に使う。
-// type ごとの eventData ペイロードは docs/apple-business-api-datatypes.md §4.3 を参照。
+// All AuditEventType values (33 in total). Compare against Attributes.Type to branch on the event.
+// For the eventData payload of each type, see docs/apple-business-api-datatypes.md §4.3.
 const (
 	TypeDeviceAddedToOrg                       = "DEVICE_ADDED_TO_ORG"
 	TypeDeviceRemovedFromOrg                   = "DEVICE_REMOVED_FROM_ORG"
@@ -196,17 +197,17 @@ type Service struct {
 
 func New(c *applebusiness.Client) *Service { return &Service{c: c} }
 
-// List は監査イベントを取得する（全ページ）。
-// 注意: /v1/auditEvents は filter[startTimestamp] が必須（未指定だと 400 PARAMETER_ERROR）。
-// 期間指定には ListRange を使うのが簡単。手動で渡す場合は q に
-// "filter[startTimestamp]"（必須, ISO8601）と "filter[endTimestamp]"（任意, ISO8601）を設定する。
+// List retrieves audit events (all pages).
+// Note: /v1/auditEvents requires filter[startTimestamp] (omitting it returns 400 PARAMETER_ERROR).
+// ListRange is the simplest way to specify a time range. To pass it manually, set
+// "filter[startTimestamp]" (required, ISO8601) and "filter[endTimestamp]" (optional, ISO8601) in q.
 func (s *Service) List(ctx context.Context, q url.Values) ([]AuditEvent, error) {
 	return applebusiness.List[Attributes](ctx, s.c, "/v1/auditEvents", q)
 }
 
-// ListRange は時間範囲を指定して監査イベントを取得する（全ページ）。
-// start は filter[startTimestamp]（必須）、end は filter[endTimestamp]（ゼロ値なら付与しない）。
-// いずれも UTC の RFC3339(ISO8601) で送る。追加の絞り込みは q で渡す（nil可）。
+// ListRange retrieves audit events within a time range (all pages).
+// start maps to filter[startTimestamp] (required); end maps to filter[endTimestamp] (omitted when zero).
+// Both are sent as UTC RFC3339 (ISO8601). Additional filters can be passed via q (may be nil).
 func (s *Service) ListRange(ctx context.Context, start, end time.Time, q url.Values) ([]AuditEvent, error) {
 	if q == nil {
 		q = url.Values{}

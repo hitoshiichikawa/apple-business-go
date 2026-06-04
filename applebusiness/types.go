@@ -1,14 +1,15 @@
 package applebusiness
 
-// JSON:API のエンベロープ型。各エンティティの属性は型パラメータ A で受ける。
+// JSON:API envelope types. Each entity's attributes are carried by the type parameter A.
 
-// Data は JSON:API のリソース識別子 ({type,id})。
+// Data is a JSON:API resource identifier ({type,id}).
 type Data struct {
 	Type string `json:"type"`
 	ID   string `json:"id"`
 }
 
-// Links は self / next など。next は次ページの絶対URL（カーソル埋め込み）。
+// Links holds self / next and similar URLs. next is the absolute URL of the next page
+// (with the cursor embedded).
 type Links struct {
 	Self    string `json:"self,omitempty"`
 	Next    string `json:"next,omitempty"`
@@ -24,7 +25,7 @@ type Meta struct {
 	Paging Paging `json:"paging,omitempty"`
 }
 
-// ResourceObject は型付き属性を持つ単一リソース。
+// ResourceObject is a single resource with typed attributes.
 type ResourceObject[A any] struct {
 	Type       string `json:"type"`
 	ID         string `json:"id"`

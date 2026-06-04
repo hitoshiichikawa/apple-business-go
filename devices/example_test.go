@@ -8,9 +8,9 @@ import (
 	"github.com/hitoshiichikawa/apple-business-go/devices"
 )
 
-// 組織のデバイス一覧を取得する（ページングは自動）。
+// List the organization's devices (pagination is automatic).
 func ExampleService_List() {
-	var c *applebusiness.Client // 実際には applebusiness.NewClient で生成する
+	var c *applebusiness.Client // in practice, create this with applebusiness.NewClient
 	svc := devices.New(c)
 	list, err := svc.List(context.Background(), nil)
 	if err != nil {
@@ -21,10 +21,10 @@ func ExampleService_List() {
 	}
 }
 
-// デバイスを MDM サーバへ割り当て、完了までポーリングする。
-// subStatus が COMPLETED_WITH_ERROR の場合は downloadUrl の CSV に明細がある。
+// Assign devices to an MDM server and poll until completion.
+// If subStatus is COMPLETED_WITH_ERROR, the CSV at downloadUrl has the details.
 func ExampleService_Assign() {
-	var c *applebusiness.Client // 実際には applebusiness.NewClient で生成する
+	var c *applebusiness.Client // in practice, create this with applebusiness.NewClient
 	svc := devices.New(c)
 	act, err := svc.Assign(context.Background(), "MDM_SERVER_ID", []string{"DEVICE_ID"})
 	if err != nil {

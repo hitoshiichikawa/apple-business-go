@@ -22,16 +22,16 @@ const (
 	DefaultSchoolBaseURL   = "https://api-school.apple.com"
 )
 
-// Config は Client の設定。
+// Config holds the settings for a Client.
 type Config struct {
-	BaseURL     string // 既定 DefaultBusinessBaseURL
+	BaseURL     string // defaults to DefaultBusinessBaseURL
 	Credentials Credentials
-	HTTPClient  *http.Client // OAuth用。nilなら既定
-	MaxRetries  int          // 429 / 5xx 時のリトライ回数。0なら4
+	HTTPClient  *http.Client // used for OAuth; defaults are applied when nil
+	MaxRetries  int          // retry count on 429 / 5xx; 4 when 0
 }
 
-// Client は Apple Business / School Manager API への認証済みHTTPクライアント。
-// devices / people などのサービスパッケージはこの Client を受け取って動作する。
+// Client is an authenticated HTTP client for the Apple Business / School Manager API.
+// Service packages such as devices and people accept this Client and operate on it.
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
@@ -40,8 +40,9 @@ type Client struct {
 	ts         oauth2.TokenSource
 }
 
-// NewClient は資格情報から認証済みクライアントを生成する。
-// Config の値に加え、Option（WithBaseURL / WithTokenURL / WithMaxRetries / WithUserAgent / WithHTTPClient）で上書きできる。
+// NewClient creates an authenticated client from the given credentials.
+// In addition to the Config values, settings can be overridden with Options
+// (WithBaseURL / WithTokenURL / WithMaxRetries / WithUserAgent / WithHTTPClient).
 func NewClient(cfg Config, opts ...Option) (*Client, error) {
 	if cfg.Credentials.ClientID == "" || cfg.Credentials.KeyID == "" || len(cfg.Credentials.PrivateKey) == 0 {
 		return nil, errors.New("applebusiness: client_id, key_id and private_key are required")
@@ -84,8 +85,9 @@ func NewClient(cfg Config, opts ...Option) (*Client, error) {
 	return &Client{baseURL: o.baseURL, httpClient: httpClient, maxRetries: o.maxRetries, userAgent: o.userAgent, ts: ts}, nil
 }
 
-// AccessToken は現在のアクセストークン（必要なら新規発行）と有効期限を返す。認証単体の疎通確認に使う。
-// 通常の API 呼び出しでは内部で自動付与されるため、明示的に呼ぶ必要はない。
+// AccessToken returns the current access token (issuing a new one if needed) and its expiry.
+// It is useful for verifying authentication on its own. Regular API calls attach the token
+// automatically, so calling this explicitly is not required.
 func (c *Client) AccessToken() (string, time.Time, error) {
 	tok, err := c.ts.Token()
 	if err != nil {
@@ -94,12 +96,12 @@ func (c *Client) AccessToken() (string, time.Time, error) {
 	return tok.AccessToken, tok.Expiry, nil
 }
 
-// BaseURL はこのクライアントのベースURLを返す。
+// BaseURL returns the base URL of this client.
 func (c *Client) BaseURL() string { return c.baseURL }
 
-// Do は与えられた絶対URLにリクエストし、レスポンスを out にデコードする。
-// 429 / 5xx は指数バックオフ（Retry-After優先）で再試行する。
-// 通常はサービスパッケージが List/Get/Create 経由で利用する。
+// Do sends a request to the given absolute URL and decodes the response into out.
+// 429 / 5xx responses are retried with exponential backoff (honoring Retry-After).
+// It is normally used by service packages through List/Get/Create.
 func (c *Client) Do(ctx context.Context, method, rawurl string, body []byte, out any) error {
 	var lastErr error
 	for attempt := 0; attempt <= c.maxRetries; attempt++ {
@@ -160,7 +162,7 @@ func (c *Client) Do(ctx context.Context, method, rawurl string, body []byte, out
 // 汎用リクエストヘルパ（サービスパッケージから利用）
 // ---------------------------------------------------------------------------
 
-// List はリストエンドポイントを links.next が尽きるまで辿り全件返す。
+// List walks a list endpoint following links.next until exhausted and returns all items.
 func List[A any](ctx context.Context, c *Client, path string, q url.Values) ([]ResourceObject[A], error) {
 	endpoint := c.baseURL + path
 	if len(q) > 0 {
@@ -178,8 +180,9 @@ func List[A any](ctx context.Context, c *Client, path string, q url.Values) ([]R
 	return out, nil
 }
 
-// ListSeq はリストエンドポイントを遅延ページングで列挙する（Go 1.23 range-over-func）。
-// 全件をメモリに展開せず、ページを跨いで1件ずつ yield する。エラー時は (zero, err) を1度 yield して終了。
+// ListSeq enumerates a list endpoint with lazy paging (Go 1.23 range-over-func).
+// It yields one item at a time across pages without loading everything into memory.
+// On error it yields (zero, err) once and stops.
 //
 //	for item, err := range applebusiness.ListSeq[devices.DeviceAttributes](ctx, c, "/v1/orgDevices", nil) {
 //	    if err != nil { return err }
@@ -216,7 +219,7 @@ func Get[A any](ctx context.Context, c *Client, path string) (*ResourceObject[A]
 	return &resp.Data, nil
 }
 
-// Relationship は relationships エンドポイント（{type,id} 配列）を全ページ辿る。
+// Relationship walks a relationships endpoint (an array of {type,id}) across all pages.
 func Relationship(ctx context.Context, c *Client, path string) ([]Data, error) {
 	endpoint := c.baseURL + path
 	var out []Data
@@ -231,7 +234,7 @@ func Relationship(ctx context.Context, c *Client, path string) ([]Data, error) {
 	return out, nil
 }
 
-// Create は POST でリソースを作成し、SingleResponse のデータを返す。
+// Create creates a resource with POST and returns the data from the SingleResponse.
 func Create[A any](ctx context.Context, c *Client, path string, body any) (*ResourceObject[A], error) {
 	raw, err := json.Marshal(body)
 	if err != nil {
@@ -244,7 +247,7 @@ func Create[A any](ctx context.Context, c *Client, path string, body any) (*Reso
 	return &resp.Data, nil
 }
 
-// Update は PATCH でリソースを更新し、SingleResponse のデータを返す。
+// Update updates a resource with PATCH and returns the data from the SingleResponse.
 func Update[A any](ctx context.Context, c *Client, path string, body any) (*ResourceObject[A], error) {
 	raw, err := json.Marshal(body)
 	if err != nil {
@@ -257,13 +260,13 @@ func Update[A any](ctx context.Context, c *Client, path string, body any) (*Reso
 	return &resp.Data, nil
 }
 
-// Delete は DELETE でリソースを削除する（204 No Content を期待）。
+// Delete deletes a resource with DELETE (expecting 204 No Content).
 func Delete(ctx context.Context, c *Client, path string) error {
 	return c.Do(ctx, http.MethodDelete, c.baseURL+path, nil, nil)
 }
 
-// ModifyRelationship は relationships エンドポイントに {"data":[{type,id},...]} を送る。
-// method は POST（追加）/ DELETE（削除）/ PATCH（集合の置換）。成功は 204/200。
+// ModifyRelationship sends {"data":[{type,id},...]} to a relationships endpoint.
+// method is POST (add) / DELETE (remove) / PATCH (replace the set). Success is 204/200.
 func ModifyRelationship(ctx context.Context, c *Client, method, path string, items []Data) error {
 	raw, err := json.Marshal(struct {
 		Data []Data `json:"data"`
@@ -302,7 +305,7 @@ func retryAfter(resp *http.Response) time.Duration {
 	return 0
 }
 
-// APIError は JSON:API のエラーレスポンス。
+// APIError is a JSON:API error response.
 type APIError struct {
 	StatusCode int
 	Errors     []struct {

@@ -8,9 +8,9 @@ import (
 	"github.com/hitoshiichikawa/apple-business-go/people"
 )
 
-// ユーザー一覧を取得する（ページングは自動）。
+// List all users (pagination handled automatically).
 func ExampleService_ListUsers() {
-	var c *applebusiness.Client // 実際には applebusiness.NewClient で生成する
+	var c *applebusiness.Client // in practice, create this with applebusiness.NewClient
 	svc := people.New(c)
 	users, err := svc.ListUsers(context.Background(), nil)
 	if err != nil {
@@ -21,9 +21,9 @@ func ExampleService_ListUsers() {
 	}
 }
 
-// ユーザーグループの一覧と、各グループの所属ユーザーID を取得する。
+// List user groups and the member user IDs of each group.
 func ExampleService_ListUserGroups() {
-	var c *applebusiness.Client // 実際には applebusiness.NewClient で生成する
+	var c *applebusiness.Client // in practice, create this with applebusiness.NewClient
 	svc := people.New(c)
 	groups, err := svc.ListUserGroups(context.Background(), nil)
 	if err != nil {

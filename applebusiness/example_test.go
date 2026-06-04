@@ -8,7 +8,7 @@ import (
 	"github.com/hitoshiichikawa/apple-business-go/applebusiness"
 )
 
-// NewClient の基本的な生成。Functional Options で User-Agent などを指定できる。
+// Basic creation of a NewClient. Functional options can set the User-Agent and more.
 func ExampleNewClient() {
 	pem, _ := os.ReadFile("abm_private_key.pem") // EC P-256 (.pem)
 	c, err := applebusiness.NewClient(applebusiness.Config{
@@ -26,9 +26,9 @@ func ExampleNewClient() {
 	_ = c
 }
 
-// ListSeq による遅延ページング（全件をメモリに載せない）。
+// Lazy paging with ListSeq (without loading everything into memory).
 func ExampleListSeq() {
-	var c *applebusiness.Client // 実際には NewClient で生成する
+	var c *applebusiness.Client // in practice, create this with NewClient
 	type deviceAttrs struct {
 		SerialNumber string `json:"serialNumber"`
 	}
@@ -40,9 +40,9 @@ func ExampleListSeq() {
 	}
 }
 
-// 型付きエラー判定の利用例。
+// Example of using the typed error predicates.
 func ExampleIsNotFound() {
-	var err error // 実際には Get などの戻り値
+	var err error // in practice, the return value of Get, etc.
 	switch {
 	case applebusiness.IsNotFound(err):
 		fmt.Println("not found")

@@ -30,13 +30,13 @@ const (
 	tokenSkew    = 5 * time.Minute
 )
 
-// Credentials は Apple Business / School Manager のポータルで発行する資格情報。
+// Credentials are the credentials issued in the Apple Business / School Manager portal.
 type Credentials struct {
-	ClientID   string // 例: "BUSINESSAPI.<uuid>"
-	TeamID     string // issuer。AxMでは client_id と同一が通例
-	KeyID      string // JWTヘッダ "kid"
-	PrivateKey []byte // PEM, EC P-256（ES256用）
-	Scope      string // "business.api" / "school.api"。空なら client_id から自動判定
+	ClientID   string // e.g. "BUSINESSAPI.<uuid>"
+	TeamID     string // issuer; in AxM this is typically identical to client_id
+	KeyID      string // JWT header "kid"
+	PrivateKey []byte // PEM, EC P-256 (for ES256)
+	Scope      string // "business.api" / "school.api"; inferred from client_id when empty
 }
 
 func (c Credentials) scope() string {
