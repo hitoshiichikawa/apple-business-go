@@ -4,9 +4,15 @@
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-06-03
+
 ### Added
 - コミュニティ/運用ファイル: `CONTRIBUTING.md` / `CODE_OF_CONDUCT.md` / Issue・PR テンプレート / Dependabot 設定。
 - `devices` / `people` に godoc Example を追加。
+
+### Changed
+- 公開シンボル（package / 型 / 関数 / 定数 / フィールド / Example）の doc コメントを **英語化**（pkg.go.dev での可読性向上）。内部の実装コメントは日本語のまま。
+- 依存更新（Dependabot）: `golang-jwt/jwt/v5` 5.3.1 / `actions/setup-go` v6 / `actions/checkout` v6。最低 Go は **1.23 を維持**（`golang.org/x/oauth2` 0.22+ と `golangci/golangci-lint-action` v7+ は要件が上がるため `dependabot.yml` で ignore）。
 
 ## [0.3.0] - 2026-06-03
 
