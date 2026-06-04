@@ -5,48 +5,48 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/hitoshiichikawa/apple-business-go)](https://goreportcard.com/report/github.com/hitoshiichikawa/apple-business-go)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Go SDK for Apple Business**（非公式）。Apple Business / School Manager の API
-（`api-business.apple.com` / `api-school.apple.com`）を呼び出すためのライブラリです。
-OAuth2（client_credentials + ES256 JWT）認証、デバイス・ユーザー・MDMサーバ等の取得、
-デバイスの**割り当て / 解除（書き込み）**に対応します。
+An **unofficial Go SDK for Apple Business**. A library for calling the Apple Business / School Manager API
+(`api-business.apple.com` / `api-school.apple.com`). It supports OAuth2 (client_credentials + ES256 JWT)
+authentication, reading devices / users / MDM servers and more, and **assigning / unassigning devices (writes)**.
 
-> 2026年4月、Apple Business Manager・Apple School Manager・Apple Business Essentials は
-> 単一プラットフォーム **「Apple Business」** に統合されました（device / people / **brand** / support の4本柱）。
-> 本SDKはこの上位ブランドに合わせ、将来のピラー追加（brand management 等）を見据えた構成にしています。
+> In April 2026, Apple Business Manager, Apple School Manager, and Apple Business Essentials were unified
+> into a single platform, **"Apple Business"** (four pillars: device / people / **brand** / support).
+> This SDK is structured around that umbrella brand, anticipating future pillars (such as brand management).
 
-> ⚠️ **非公式SDK**です。API定義は公開実装から抽出・検証したものですが、本番投入前に Apple 公式での最終確認を推奨します
-> （詳細は `docs/apple-business-api-reference.md`）。
+> ⚠️ This is an **unofficial SDK**. The API definitions were extracted and verified from public implementations,
+> but final confirmation against Apple's official documentation is recommended before production use
+> (see `docs/apple-business-api-reference.md`).
 
 ---
 
-## パッケージ構成（4本柱に対応）
+## Package layout (mapped to the four pillars)
 
 ```
 apple-business-go/
-├── applebusiness/   コア（共通基盤）: Client, Config, Credentials, OAuth2/JWT, transport, pagination, errors
-├── devices/         デバイス管理: orgDevices, mdmServers, orgDeviceActivities, appleCareCoverage
-├── blueprints/      Blueprint管理: CRUD + 割り当て（apps/configurations/devices/users/groups）
-├── configurations/  Configuration管理: CRUD（CUSTOM_SETTING プロファイル）
-├── apps/            アプリ/パッケージ（読み取り）: apps, packages
-├── auditevents/     監査イベント（読み取り）: auditEvents
-├── people/          ピープル管理: users, userGroups
-├── brand/           ブランド管理（将来 / Apple Business Connect 系）
-└── support/         サポート（将来）
+├── applebusiness/   Core (shared foundation): Client, Config, Credentials, OAuth2/JWT, transport, pagination, errors
+├── devices/         Device management: orgDevices, mdmServers, orgDeviceActivities, appleCareCoverage
+├── blueprints/      Blueprint management: CRUD + assignment (apps/configurations/devices/users/groups)
+├── configurations/  Configuration management: CRUD (CUSTOM_SETTING profiles)
+├── apps/            Apps / packages (read-only): apps, packages
+├── auditevents/     Audit events (read-only): auditEvents
+├── people/          People management: users, userGroups
+├── brand/           Brand management (future / Apple Business Connect)
+└── support/         Support (future)
 ```
 
-- サービスパッケージ（`devices` / `people`）は `*applebusiness.Client` を受け取って動作します。
-- 認証・リトライ・ページネーションは `applebusiness` コアに集約。柱が増えてもコアは不変です。
+- The service packages (`devices` / `people`) accept a `*applebusiness.Client` and operate on it.
+- Authentication, retries, and pagination are centralized in the `applebusiness` core; the core stays unchanged as pillars are added.
 
 ---
 
-## インストール
+## Install
 
 ```bash
 go get github.com/hitoshiichikawa/apple-business-go/applebusiness
 go get github.com/hitoshiichikawa/apple-business-go/devices
 ```
 
-## クイックスタート（読み取り）
+## Quickstart (read)
 
 ```go
 import (
@@ -57,42 +57,43 @@ import (
 pem, _ := os.ReadFile("abm_private_key.pem") // EC P-256 (.pem)
 
 c, err := applebusiness.NewClient(applebusiness.Config{
-    BaseURL: applebusiness.DefaultBusinessBaseURL, // ASM は DefaultSchoolBaseURL
+    BaseURL: applebusiness.DefaultBusinessBaseURL, // use DefaultSchoolBaseURL for ASM
     Credentials: applebusiness.Credentials{
         ClientID:   "BUSINESSAPI.xxxxxxxx-....",
-        TeamID:     "BUSINESSAPI.xxxxxxxx-....", // AxM では client_id と同一が通例
+        TeamID:     "BUSINESSAPI.xxxxxxxx-....", // typically identical to client_id on AxM
         KeyID:      "xxxxxxxx-....",
         PrivateKey: pem,
-        Scope:      "business.api", // 空なら client_id から自動判定
+        Scope:      "business.api", // auto-detected from client_id when empty
     },
 })
 
-devs, err := devices.New(c).List(context.Background(), nil) // ページングは自動
+devs, err := devices.New(c).List(context.Background(), nil) // pagination handled automatically
 for _, d := range devs {
     fmt.Println(d.Attributes.SerialNumber, d.Attributes.Status)
 }
 ```
 
-## クイックスタート（書き込み: 割り当て / 解除）
+## Quickstart (write: assign / unassign)
 
 ```go
 svc := devices.New(c)
 act, err := svc.Assign(ctx, serverID, []string{deviceID1, deviceID2})
-// 解除なら svc.Unassign(ctx, serverID, deviceIDs)
+// to unassign: svc.Unassign(ctx, serverID, deviceIDs)
 
 final, err := svc.PollActivity(ctx, act.ID, 3*time.Second)
 fmt.Println(final.Attributes.Status, final.Attributes.SubStatus)
 ```
 
-実行サンプルは [`examples/`](./examples)（`list-devices`, `assign-devices`, `smoke-test`, `dump-all`, `write-test`）。疎通確認は [`smoke-test`](./examples/smoke-test)、全リード系の応答ダンプは [`dump-all`](./examples/dump-all)。
+Runnable samples live in [`examples/`](./examples) (`list-devices`, `assign-devices`, `smoke-test`, `dump-all`, `write-test`).
+For a connectivity check use [`smoke-test`](./examples/smoke-test); to dump every read endpoint use [`dump-all`](./examples/dump-all).
 
-## クイックスタート（監査イベント）
+## Quickstart (audit events)
 
 ```go
-// /v1/auditEvents は filter[startTimestamp] が必須。期間指定は ListRange を使う
+// /v1/auditEvents requires filter[startTimestamp]; use ListRange for a time range
 events, _ := auditevents.New(c).ListRange(ctx, time.Now().AddDate(0, 0, -7), time.Now(), nil)
 for _, ev := range events {
-    a := ev.Attributes // 共通項目: a.Type, a.ActorID, a.EventDateTime ...
+    a := ev.Attributes // common fields: a.Type, a.ActorID, a.EventDateTime ...
     if a.Type == "DEVICE_ASSIGNED_TO_SERVER" {
         var d auditevents.DeviceAssignedToServer
         _ = a.Payload(&d) // d.SerialNumber, d.TargetServerName
@@ -102,25 +103,26 @@ for _, ev := range events {
 
 ---
 
-## 認証
+## Authentication
 
-資格情報は Apple Business / School Manager のポータルで発行（Organization Administrator のみ）。
+Issue credentials in the Apple Business / School Manager portal (Organization Administrator only).
 
-| 項目 | 内容 |
+| Item | Description |
 |---|---|
-| `client_id` | 例: `BUSINESSAPI.<uuid>` |
-| `key_id` | JWT ヘッダの `kid` |
-| `team_id` | issuer（AxM では `client_id` と同一が通例） |
-| 秘密鍵 | `.pem`（EC P-256 / ES256用） |
+| `client_id` | e.g. `BUSINESSAPI.<uuid>` |
+| `key_id` | the `kid` in the JWT header |
+| `team_id` | issuer (typically identical to `client_id` on AxM) |
+| private key | `.pem` (EC P-256 / for ES256) |
 
-ES256 で署名した JWT client assertion を生成し、`POST https://account.apple.com/auth/oauth2/token` に
-`grant_type=client_credentials` で交換。`scope` は `business.api` / `school.api`。アクセストークンは1時間有効。
+Generate a JWT client assertion signed with ES256 and exchange it at
+`POST https://account.apple.com/auth/oauth2/token` with `grant_type=client_credentials`.
+The `scope` is `business.api` / `school.api`. Access tokens are valid for one hour.
 
 ---
 
-## 対応エンドポイント
+## Supported endpoints
 
-| パッケージ | エンドポイント | API |
+| Package | Methods | API |
 |---|---|---|
 | `devices` | `List` / `Get` | `/v1/orgDevices`, `/v1/orgDevices/{id}` |
 | `devices` | `AssignedServer` / `AppleCareCoverage` | `/v1/orgDevices/{id}/assignedServer`, `.../appleCareCoverage` |
@@ -131,53 +133,55 @@ ES256 で署名した JWT client assertion を生成し、`POST https://account.
 | `blueprints` | `List` / `Get` / `Create` / `Update` / `Delete` / `AddTo` / `RemoveFrom` / `Replace` / `RelationshipIDs` | `/v1/blueprints(/{id})(/relationships/{rel})` |
 | `configurations` | `List` / `Get` / `Create` / `Update` / `Delete` | `/v1/configurations(/{id})` |
 | `apps` | `ListApps` / `GetApp` / `ListPackages` / `GetPackage` | `/v1/apps(/{id})`, `/v1/packages(/{id})` |
-| `auditevents` | `List` | `/v1/auditEvents`（絞り込みクエリ名は要確認） |
+| `auditevents` | `List` / `ListRange` | `/v1/auditEvents` (requires `filter[startTimestamp]`) |
 
-フィールド・列挙値の一次情報は [`docs/apple-business-api-datatypes.md`](./docs/apple-business-api-datatypes.md)、
-エンドポイントの詳細は [`docs/apple-business-api-reference.md`](./docs/apple-business-api-reference.md)。
-
----
-
-## ステータス / ロードマップ
-
-- [x] コア（OAuth2 / リトライ / ページネーション）
-- [x] `devices`（読み取り + 割り当て/解除）
-- [x] `people`（users / userGroups）
-- [x] `apps`（apps / packages）/ `auditevents`（auditEvents）: 実装済み（読み取り）。公式フィールド一致。テストは未
-- [x] `blueprints` / `configurations`（組み込みデバイス管理）: 実装済み（CRUD + 割り当て）。公式仕様確認済み。実機検証・テストは未
-- [x] 全リソースの `Attributes`・列挙値・監査モデルを公式 DocC で確認し一致（[`docs/apple-business-api-datatypes.md`](./docs/apple-business-api-datatypes.md)）
-- [x] Functional Options（`WithBaseURL`/`WithTokenURL`/`WithMaxRetries`/`WithUserAgent`/`WithHTTPClient`）
-- [x] 型付きエラー判定（`IsNotFound`/`IsRateLimited`/`IsUnauthorized`/`IsForbidden`/`IsConflict`）
-- [x] `ListSeq`（Go 1.23 range-over-func の遅延ページング）
-- [x] コアの単体テスト（`httptest`）/ CHANGELOG / golangci-lint / CI（gofmt・vet・build・test -race・lint）
-- [ ] 各ドメインパッケージの単体テスト拡充 / 書き込みリトライの冪等性レビュー
-- [ ] `brand` / `support` パッケージ（将来）
+The primary source for fields and enum values is [`docs/apple-business-api-datatypes.md`](./docs/apple-business-api-datatypes.md);
+endpoint details are in [`docs/apple-business-api-reference.md`](./docs/apple-business-api-reference.md).
 
 ---
 
-## 開発
+## Status / roadmap
 
-Go 1.23+（`ListSeq` の range-over-func を使用）。
+- [x] Core (OAuth2 / retries / pagination)
+- [x] `devices` (read + assign/unassign)
+- [x] `people` (users / userGroups)
+- [x] `apps` (apps / packages) / `auditevents` (auditEvents): implemented (read-only); fields match the official spec
+- [x] `blueprints` / `configurations` (built-in device management): implemented (CRUD + assignment); spec confirmed and write paths verified against the live API
+- [x] All resource `Attributes`, enum values, and the audit model confirmed against the official DocC ([`docs/apple-business-api-datatypes.md`](./docs/apple-business-api-datatypes.md))
+- [x] Functional options (`WithBaseURL`/`WithTokenURL`/`WithMaxRetries`/`WithUserAgent`/`WithHTTPClient`)
+- [x] Typed error predicates (`IsNotFound`/`IsRateLimited`/`IsUnauthorized`/`IsForbidden`/`IsConflict`)
+- [x] `ListSeq` (lazy paging via Go 1.23 range-over-func)
+- [x] Unit tests (`httptest`) for all packages / CHANGELOG / golangci-lint / CI (gofmt, vet, build, test -race, lint)
+- [ ] Idempotency review of write retries (avoid duplicate POSTs)
+- [ ] `brand` / `support` packages (future; `brand` has no public API spec yet — see [`ROADMAP.md`](./ROADMAP.md))
+
+---
+
+## Development
+
+Go 1.23+ (uses `ListSeq`'s range-over-func).
 
 ```bash
 go mod tidy
 go build ./...
 go vet ./...
-gofmt -l .        # 差分なしを確認
+gofmt -l .              # confirm no diff
+golangci-lint run ./...
 go test -race ./...
 ```
 
 ---
 
-## クレジット
+## Credits
 
-API定義・認証フローは以下の公開実装を参考に独自実装したものです（コードの直接流用なし）。
+The API definitions and authentication flow were implemented independently, with reference to the following
+public projects (no code was copied directly):
 
 - [`micromdm/nanoaxm`](https://github.com/micromdm/nanoaxm) (Go)
 - [`neilmartin83/terraform-provider-axm`](https://github.com/neilmartin83/terraform-provider-axm) (Go)
-- ほか `rodchristiansen/asbmutil` (Swift), `EUCTechTopics/PSABM` (PowerShell) 等
+- and others such as `rodchristiansen/asbmutil` (Swift), `EUCTechTopics/PSABM` (PowerShell)
 
-## ライセンス
+## License
 
-[MIT](./LICENSE)（著作権者表記は適宜変更してください）。
-Apple、Apple Business、Apple Business Manager、Apple School Manager は Apple Inc. の商標です。本プロジェクトは Apple とは無関係の非公式実装です。
+[MIT](./LICENSE). Apple, Apple Business, Apple Business Manager, and Apple School Manager are trademarks of
+Apple Inc. This is an unofficial project, not affiliated with Apple.
