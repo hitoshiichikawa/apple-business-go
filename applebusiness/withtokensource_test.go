@@ -14,7 +14,7 @@ import (
 // it was called. When an injected token source is used, this count must stay 0.
 func failOnHitTokenServer(t *testing.T, hits *int32) *httptest.Server {
 	t.Helper()
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt32(hits, 1)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"access_token":"endpoint-token","token_type":"Bearer","expires_in":3600}`))
