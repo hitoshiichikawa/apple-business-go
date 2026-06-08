@@ -139,10 +139,21 @@ The `scope` is `business.api` / `school.api`. Access tokens are valid for one ho
 > - With multiple credentials, **cache one `Client` per credential** and reuse it.
 > - If you must avoid keeping the decrypted private key resident in memory, do not cache the
 >   whole `Client`; instead **cache only the access token and decrypt the key solely on token
->   refresh** (≈ once per hour) via a custom `oauth2.TokenSource` (injectable with
->   `WithHTTPClient`).
+>   refresh** (≈ once per hour) via a custom `oauth2.TokenSource` injected with
+>   [`WithTokenSource`](#authentication) (it makes `Credentials` optional and replaces the
+>   built-in source).
 > - When multiple requests can miss the cache concurrently, **serialize token issuance with
 >   single-flight** so you do not fan out simultaneous token requests.
+
+To bring your own token lifecycle, inject an `oauth2.TokenSource` with `WithTokenSource`. When
+provided, `Credentials` are optional and the SDK uses your source as-is:
+
+```go
+c, err := applebusiness.NewClient(
+    applebusiness.Config{BaseURL: applebusiness.DefaultBusinessBaseURL},
+    applebusiness.WithTokenSource(myTokenSource), // no Credentials required
+)
+```
 
 ---
 
@@ -174,7 +185,7 @@ endpoint details are in [`docs/apple-business-api-reference.md`](./docs/apple-bu
 - [x] `apps` (apps / packages) / `auditevents` (auditEvents): implemented (read-only); fields match the official spec
 - [x] `blueprints` / `configurations` (built-in device management): implemented (CRUD + assignment); spec confirmed and write paths verified against the live API
 - [x] All resource `Attributes`, enum values, and the audit model confirmed against the official DocC ([`docs/apple-business-api-datatypes.md`](./docs/apple-business-api-datatypes.md))
-- [x] Functional options (`WithBaseURL`/`WithTokenURL`/`WithMaxRetries`/`WithUserAgent`/`WithHTTPClient`)
+- [x] Functional options (`WithBaseURL`/`WithTokenURL`/`WithMaxRetries`/`WithUserAgent`/`WithHTTPClient`/`WithTokenSource`)
 - [x] Typed error predicates (`IsNotFound`/`IsRateLimited`/`IsUnauthorized`/`IsForbidden`/`IsConflict`)
 - [x] `ListSeq` (lazy paging via Go 1.23 range-over-func)
 - [x] Unit tests (`httptest`) for all packages / CHANGELOG / golangci-lint / CI (gofmt, vet, build, test -race, lint)
