@@ -118,6 +118,32 @@ Generate a JWT client assertion signed with ES256 and exchange it at
 `POST https://account.apple.com/auth/oauth2/token` with `grant_type=client_credentials`.
 The `scope` is `business.api` / `school.api`. Access tokens are valid for one hour.
 
+> [!IMPORTANT]
+> **Create one `Client` per credential and reuse it. Do not call `NewClient` on every
+> request / API call.**
+>
+> A `Client` caches its OAuth access token internally via `oauth2.ReuseTokenSource`, but
+> only for the lifetime of that single `Client` instance. If you build a new `Client` for
+> each API call, **you mint a fresh access token every time**. Under bursty load (e.g. a UI
+> that fetches several resources back-to-back), the token endpoint
+> `POST https://account.apple.com/auth/oauth2/token` starts returning
+> **`429 invalid_request "Too many requests"`**, which then makes the API call itself fail.
+>
+> Note that this failure surfaces as a `*url.Error`
+> (`Get ".../v1/...": applebusiness oauth: token failed (429): ...`) and is **not** an
+> `*applebusiness.APIError` — `errors.As(err, &apiErr)` will not match it, so it is reported
+> as a transport / unreachable error rather than an Apple API status error.
+>
+> Mitigations:
+> - **Long-lived processes: create the `Client` once and share it** (simplest and safest).
+> - With multiple credentials, **cache one `Client` per credential** and reuse it.
+> - If you must avoid keeping the decrypted private key resident in memory, do not cache the
+>   whole `Client`; instead **cache only the access token and decrypt the key solely on token
+>   refresh** (≈ once per hour) via a custom `oauth2.TokenSource` (injectable with
+>   `WithHTTPClient`).
+> - When multiple requests can miss the cache concurrently, **serialize token issuance with
+>   single-flight** so you do not fan out simultaneous token requests.
+
 ---
 
 ## Supported endpoints
