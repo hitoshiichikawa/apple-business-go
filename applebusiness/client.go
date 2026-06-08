@@ -40,14 +40,18 @@ type Client struct {
 	ts         oauth2.TokenSource
 }
 
-// NewClient creates an authenticated client from the given credentials.
+// NewClient creates an authenticated client.
+//
+// By default the token source is built from Config.Credentials (client_id,
+// key_id and private_key are required). Alternatively, inject a caller-managed
+// token source with WithTokenSource; in that case Credentials are optional and
+// the injected source is used as-is (see WithTokenSource for why this matters
+// for token reuse and private-key residency).
+//
 // In addition to the Config values, settings can be overridden with Options
-// (WithBaseURL / WithTokenURL / WithMaxRetries / WithUserAgent / WithHTTPClient).
+// (WithBaseURL / WithTokenURL / WithMaxRetries / WithUserAgent / WithHTTPClient /
+// WithTokenSource).
 func NewClient(cfg Config, opts ...Option) (*Client, error) {
-	if cfg.Credentials.ClientID == "" || cfg.Credentials.KeyID == "" || len(cfg.Credentials.PrivateKey) == 0 {
-		return nil, errors.New("applebusiness: client_id, key_id and private_key are required")
-	}
-
 	o := options{
 		baseURL:    cfg.BaseURL,
 		maxRetries: cfg.MaxRetries,
@@ -57,6 +61,17 @@ func NewClient(cfg Config, opts ...Option) (*Client, error) {
 		fn(&o)
 	}
 
+	// Resolve the token source. An injected source (WithTokenSource) wins and
+	// makes Credentials optional; otherwise build one from Credentials, which
+	// are then required.
+	ts := o.tokenSource
+	if ts == nil {
+		if cfg.Credentials.ClientID == "" || cfg.Credentials.KeyID == "" || len(cfg.Credentials.PrivateKey) == 0 {
+			return nil, errors.New("applebusiness: client_id, key_id and private_key are required (or inject a token source with WithTokenSource)")
+		}
+		ts = newTokenSource(cfg.Credentials, o.httpClient, o.tokenURL)
+	}
+
 	if o.baseURL == "" {
 		o.baseURL = DefaultBusinessBaseURL
 	}
@@ -64,8 +79,9 @@ func NewClient(cfg Config, opts ...Option) (*Client, error) {
 		o.maxRetries = 4
 	}
 
-	// API 呼び出し用トランスポート。WithHTTPClient 指定時はその Transport / Timeout を基盤に使い、
-	// トークン注入（oauth2.Transport）は維持する。
+	// Transport for API calls. When WithHTTPClient is supplied, its Transport /
+	// Timeout are used as the base; the token-injecting oauth2.Transport is kept
+	// on top.
 	var base = http.DefaultTransport
 	apiTimeout := 60 * time.Second
 	if o.httpClient != nil {
@@ -77,7 +93,6 @@ func NewClient(cfg Config, opts ...Option) (*Client, error) {
 		}
 	}
 
-	ts := newTokenSource(cfg.Credentials, o.httpClient, o.tokenURL)
 	httpClient := &http.Client{
 		Timeout:   apiTimeout,
 		Transport: &oauth2.Transport{Source: ts, Base: base},
