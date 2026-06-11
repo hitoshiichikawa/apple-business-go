@@ -292,6 +292,65 @@ func TestAPIErrorDecodeAndClassifier(t *testing.T) {
 	}
 }
 
+func TestListRefusesCrossHostNext(t *testing.T) {
+	tok := startTokenServer(t, nil)
+
+	var evilCalls int
+	evil := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		evilCalls++
+		writeJSONResp(t, w, http.StatusOK, ListResponse[testAttrs]{})
+	}))
+	t.Cleanup(evil.Close)
+
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSONResp(t, w, http.StatusOK, ListResponse[testAttrs]{
+			Data:  []ResourceObject[testAttrs]{{Type: "thing", ID: "1", Attributes: testAttrs{Name: "a"}}},
+			Links: Links{Next: evil.URL + "/v1/things?cursor=2"},
+		})
+	}))
+	t.Cleanup(api.Close)
+
+	c := newTestClient(t, api.URL, tok.URL)
+	_, err := List[testAttrs](context.Background(), c, "/v1/things", nil)
+	if err == nil {
+		t.Fatal("expected error for cross-host links.next")
+	}
+	if !errors.Is(err, errCrossHost) {
+		t.Fatalf("err = %v, want errCrossHost", err)
+	}
+	if evilCalls != 0 {
+		t.Fatalf("cross-host server received %d requests, want 0", evilCalls)
+	}
+}
+
+func TestDoRefusesCrossHostRedirect(t *testing.T) {
+	tok := startTokenServer(t, nil)
+
+	var evilCalls int
+	evil := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		evilCalls++
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(evil.Close)
+
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, evil.URL+"/steal", http.StatusFound)
+	}))
+	t.Cleanup(api.Close)
+
+	c := newTestClient(t, api.URL, tok.URL, WithMaxRetries(1))
+	_, err := Get[testAttrs](context.Background(), c, "/v1/things/1")
+	if err == nil {
+		t.Fatal("expected error for cross-host redirect")
+	}
+	if !errors.Is(err, errCrossHost) {
+		t.Fatalf("err = %v, want errCrossHost", err)
+	}
+	if evilCalls != 0 {
+		t.Fatalf("cross-host server received %d requests, want 0", evilCalls)
+	}
+}
+
 func TestAPIErrorNonJSONBody(t *testing.T) {
 	tok := startTokenServer(t, nil)
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

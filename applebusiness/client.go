@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -34,10 +35,21 @@ type Config struct {
 // Service packages such as devices and people accept this Client and operate on it.
 type Client struct {
 	baseURL    string
+	origin     *url.URL // parsed baseURL; every request must match its scheme+host
 	httpClient *http.Client
 	maxRetries int
 	userAgent  string
 	ts         oauth2.TokenSource
+}
+
+// errCrossHost guards the bearer token: the oauth2 transport attaches it to
+// every request this client makes, so requests whose scheme/host differ from
+// the base URL (a poisoned links.next, a redirect to another origin, ...) are
+// refused before anything is sent.
+var errCrossHost = errors.New("applebusiness: refusing cross-host request")
+
+func sameOrigin(u, origin *url.URL) bool {
+	return strings.EqualFold(u.Scheme, origin.Scheme) && strings.EqualFold(u.Host, origin.Host)
 }
 
 // NewClient creates an authenticated client.
@@ -79,6 +91,11 @@ func NewClient(cfg Config, opts ...Option) (*Client, error) {
 		o.maxRetries = 4
 	}
 
+	origin, err := url.Parse(o.baseURL)
+	if err != nil || origin.Scheme == "" || origin.Host == "" {
+		return nil, fmt.Errorf("applebusiness: invalid base URL %q", o.baseURL)
+	}
+
 	// Transport for API calls. When WithHTTPClient is supplied, its Transport /
 	// Timeout are used as the base; the token-injecting oauth2.Transport is kept
 	// on top.
@@ -93,11 +110,23 @@ func NewClient(cfg Config, opts ...Option) (*Client, error) {
 		}
 	}
 
+	// oauth2.Transport はリダイレクトの各ホップでもトークンを再付与するため、
+	// net/http 標準の「クロスホスト時に Authorization を落とす」保護が効かない。
+	// CheckRedirect で同一オリジン以外への追従を拒否してトークン送出を防ぐ。
 	httpClient := &http.Client{
 		Timeout:   apiTimeout,
 		Transport: &oauth2.Transport{Source: ts, Base: base},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if !sameOrigin(req.URL, origin) {
+				return fmt.Errorf("%w: redirect to %q (base %q)", errCrossHost, req.URL, o.baseURL)
+			}
+			if len(via) >= 10 {
+				return errors.New("applebusiness: stopped after 10 redirects")
+			}
+			return nil
+		},
 	}
-	return &Client{baseURL: o.baseURL, httpClient: httpClient, maxRetries: o.maxRetries, userAgent: o.userAgent, ts: ts}, nil
+	return &Client{baseURL: o.baseURL, origin: origin, httpClient: httpClient, maxRetries: o.maxRetries, userAgent: o.userAgent, ts: ts}, nil
 }
 
 // AccessToken returns the current access token (issuing a new one if needed) and its expiry.
@@ -117,7 +146,19 @@ func (c *Client) BaseURL() string { return c.baseURL }
 // Do sends a request to the given absolute URL and decodes the response into out.
 // 429 / 5xx responses are retried with exponential backoff (honoring Retry-After).
 // It is normally used by service packages through List/Get/Create.
+//
+// Because the bearer token is attached to every request, rawurl must point at
+// the same scheme+host as the client's base URL; anything else (including
+// redirects to another origin) is refused before the request is sent.
 func (c *Client) Do(ctx context.Context, method, rawurl string, body []byte, out any) error {
+	u, err := url.Parse(rawurl)
+	if err != nil {
+		return fmt.Errorf("applebusiness: parse request URL: %w", err)
+	}
+	if !sameOrigin(u, c.origin) {
+		return fmt.Errorf("%w: %q (base %q)", errCrossHost, rawurl, c.baseURL)
+	}
+
 	var lastErr error
 	for attempt := 0; attempt <= c.maxRetries; attempt++ {
 		var reader io.Reader
@@ -138,6 +179,10 @@ func (c *Client) Do(ctx context.Context, method, rawurl string, body []byte, out
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
+			// クロスホストリダイレクト拒否はリトライしても結果が変わらない。
+			if errors.Is(err, errCrossHost) {
+				return err
+			}
 			lastErr = err
 			if attempt == c.maxRetries || !sleepBackoff(ctx, attempt, 0) {
 				return err
