@@ -8,9 +8,11 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -287,6 +289,35 @@ func TestAPIErrorDecodeAndClassifier(t *testing.T) {
 	}
 	if IsRateLimited(err) || IsUnauthorized(err) {
 		t.Fatalf("misclassified: %v", err)
+	}
+}
+
+func TestAPIErrorNonJSONBody(t *testing.T) {
+	tok := startTokenServer(t, nil)
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte("<html>upstream error</html>"))
+	}))
+	t.Cleanup(api.Close)
+
+	c := newTestClient(t, api.URL, tok.URL)
+	_, err := Get[testAttrs](context.Background(), c, "/v1/things/1")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var ae *APIError
+	if !errors.As(err, &ae) {
+		t.Fatalf("not an APIError: %v", err)
+	}
+	if ae.StatusCode != http.StatusBadRequest || len(ae.Errors) != 0 {
+		t.Fatalf("unexpected APIError: %+v", ae)
+	}
+	if !strings.Contains(ae.RawBody, "upstream error") {
+		t.Fatalf("RawBody = %q, want body snippet", ae.RawBody)
+	}
+	if !strings.Contains(err.Error(), "upstream error") {
+		t.Fatalf("Error() = %q, want body snippet included", err.Error())
 	}
 }
 

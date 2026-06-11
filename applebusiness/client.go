@@ -182,6 +182,10 @@ func drainAndClose(body io.ReadCloser) {
 }
 
 // ---------------------------------------------------------------------------
+// 内部ヘルパ
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
 // 汎用リクエストヘルパ（サービスパッケージから利用）
 // ---------------------------------------------------------------------------
 
@@ -314,10 +318,6 @@ func ModifyRelationship(ctx context.Context, c *Client, method, path string, ite
 	return c.Do(ctx, method, c.baseURL+path, raw, nil)
 }
 
-// ---------------------------------------------------------------------------
-// 内部ヘルパ / エラー
-// ---------------------------------------------------------------------------
-
 func sleepBackoff(ctx context.Context, attempt int, base time.Duration) bool {
 	d := base
 	if d <= 0 {
@@ -340,28 +340,4 @@ func retryAfter(resp *http.Response) time.Duration {
 		}
 	}
 	return 0
-}
-
-// APIError is a JSON:API error response.
-type APIError struct {
-	StatusCode int
-	Errors     []struct {
-		Status string `json:"status"`
-		Code   string `json:"code"`
-		Title  string `json:"title"`
-		Detail string `json:"detail"`
-	} `json:"errors"`
-}
-
-func (e *APIError) Error() string {
-	if len(e.Errors) > 0 {
-		return fmt.Sprintf("applebusiness: API error %d: %s - %s", e.StatusCode, e.Errors[0].Code, e.Errors[0].Detail)
-	}
-	return fmt.Sprintf("applebusiness: API error %d", e.StatusCode)
-}
-
-func decodeAPIError(resp *http.Response) error {
-	e := &APIError{StatusCode: resp.StatusCode}
-	_ = json.NewDecoder(resp.Body).Decode(e)
-	return e
 }
