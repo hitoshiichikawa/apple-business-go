@@ -147,7 +147,7 @@ func (c *Client) Do(ctx context.Context, method, rawurl string, body []byte, out
 
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
 			wait := retryAfter(resp)
-			_ = resp.Body.Close()
+			drainAndClose(resp.Body)
 			lastErr = &APIError{StatusCode: resp.StatusCode}
 			if attempt == c.maxRetries || !sleepBackoff(ctx, attempt, wait) {
 				return lastErr
@@ -156,41 +156,67 @@ func (c *Client) Do(ctx context.Context, method, rawurl string, body []byte, out
 		}
 
 		if resp.StatusCode >= 400 {
-			defer func() { _ = resp.Body.Close() }()
+			defer drainAndClose(resp.Body)
 			return decodeAPIError(resp)
 		}
 
 		if out != nil {
-			defer func() { _ = resp.Body.Close() }()
+			defer drainAndClose(resp.Body)
 			if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
 				return fmt.Errorf("applebusiness: decode response: %w", err)
 			}
 		} else {
-			_ = resp.Body.Close()
+			drainAndClose(resp.Body)
 		}
 		return nil
 	}
 	return lastErr
 }
 
+// drainAndClose reads the body to EOF before closing so the underlying
+// keep-alive connection can be reused (a partially read body forces the
+// transport to discard the connection).
+func drainAndClose(body io.ReadCloser) {
+	_, _ = io.Copy(io.Discard, body)
+	_ = body.Close()
+}
+
 // ---------------------------------------------------------------------------
 // 汎用リクエストヘルパ（サービスパッケージから利用）
 // ---------------------------------------------------------------------------
 
+// pager is satisfied by page-shaped responses that carry a links.next URL.
+// followPages is the single place that walks a links.next chain; List / ListSeq /
+// Relationship are all built on top of it.
+type pager interface{ nextLink() string }
+
+func (r ListResponse[A]) nextLink() string      { return r.Links.Next }
+func (r RelationshipResponse) nextLink() string { return r.Links.Next }
+
+// followPages GETs endpoint, decodes each page into P and hands it to handle,
+// following links.next until exhausted. handle returns false to stop early.
+func followPages[P pager](ctx context.Context, c *Client, endpoint string, handle func(P) bool) error {
+	for endpoint != "" {
+		var page P
+		if err := c.Do(ctx, http.MethodGet, endpoint, nil, &page); err != nil {
+			return err
+		}
+		if !handle(page) {
+			return nil
+		}
+		endpoint = page.nextLink()
+	}
+	return nil
+}
+
 // List walks a list endpoint following links.next until exhausted and returns all items.
 func List[A any](ctx context.Context, c *Client, path string, q url.Values) ([]ResourceObject[A], error) {
-	endpoint := c.baseURL + path
-	if len(q) > 0 {
-		endpoint += "?" + q.Encode()
-	}
 	var out []ResourceObject[A]
-	for endpoint != "" {
-		var page ListResponse[A]
-		if err := c.Do(ctx, http.MethodGet, endpoint, nil, &page); err != nil {
+	for item, err := range ListSeq[A](ctx, c, path, q) {
+		if err != nil {
 			return nil, err
 		}
-		out = append(out, page.Data...)
-		endpoint = page.Links.Next
+		out = append(out, item)
 	}
 	return out, nil
 }
@@ -209,19 +235,17 @@ func ListSeq[A any](ctx context.Context, c *Client, path string, q url.Values) i
 		if len(q) > 0 {
 			endpoint += "?" + q.Encode()
 		}
-		for endpoint != "" {
-			var page ListResponse[A]
-			if err := c.Do(ctx, http.MethodGet, endpoint, nil, &page); err != nil {
-				var zero ResourceObject[A]
-				yield(zero, err)
-				return
-			}
+		err := followPages(ctx, c, endpoint, func(page ListResponse[A]) bool {
 			for _, item := range page.Data {
 				if !yield(item, nil) {
-					return
+					return false
 				}
 			}
-			endpoint = page.Links.Next
+			return true
+		})
+		if err != nil {
+			var zero ResourceObject[A]
+			yield(zero, err)
 		}
 	}
 }
@@ -236,15 +260,13 @@ func Get[A any](ctx context.Context, c *Client, path string) (*ResourceObject[A]
 
 // Relationship walks a relationships endpoint (an array of {type,id}) across all pages.
 func Relationship(ctx context.Context, c *Client, path string) ([]Data, error) {
-	endpoint := c.baseURL + path
 	var out []Data
-	for endpoint != "" {
-		var resp RelationshipResponse
-		if err := c.Do(ctx, http.MethodGet, endpoint, nil, &resp); err != nil {
-			return nil, err
-		}
-		out = append(out, resp.Data...)
-		endpoint = resp.Links.Next
+	err := followPages(ctx, c, c.baseURL+path, func(page RelationshipResponse) bool {
+		out = append(out, page.Data...)
+		return true
+	})
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }
