@@ -15,6 +15,9 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type testAttrs struct {
@@ -290,6 +293,42 @@ func TestAPIErrorDecodeAndClassifier(t *testing.T) {
 	}
 	if IsRateLimited(err) || IsUnauthorized(err) {
 		t.Fatalf("misclassified: %v", err)
+	}
+}
+
+func TestClientAssertionShortTTL(t *testing.T) {
+	var form url.Values
+	tok := startTokenServer(t, &form)
+	api := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(api.Close)
+
+	c := newTestClient(t, api.URL, tok.URL)
+	if _, _, err := c.AccessToken(); err != nil {
+		t.Fatalf("AccessToken: %v", err)
+	}
+
+	assertion := form.Get("client_assertion")
+	if assertion == "" {
+		t.Fatal("client_assertion missing")
+	}
+	claims := jwt.MapClaims{}
+	if _, _, err := jwt.NewParser().ParseUnverified(assertion, claims); err != nil {
+		t.Fatalf("parse assertion: %v", err)
+	}
+	iat, ok1 := claims["iat"].(float64)
+	exp, ok2 := claims["exp"].(float64)
+	if !ok1 || !ok2 {
+		t.Fatalf("iat/exp missing or wrong type: %v", claims)
+	}
+	want := int64((assertionTTL + assertionIatSkew) / time.Second)
+	if got := int64(exp) - int64(iat); got != want {
+		t.Fatalf("exp-iat = %ds, want %ds (TTL %s + iat skew %s)", got, want, assertionTTL, assertionIatSkew)
+	}
+	if jti, _ := claims["jti"].(string); jti == "" {
+		t.Fatal("jti missing")
+	}
+	if aud, _ := claims["aud"].(string); aud != audienceURL {
+		t.Fatalf("aud = %q, want %q", claims["aud"], audienceURL)
 	}
 }
 

@@ -180,8 +180,15 @@ func (c *Client) Do(ctx context.Context, method, rawurl string, body []byte, out
 			req.Header.Set("Content-Type", "application/json")
 		}
 
-		resp, err := c.httpClient.Do(req)
+		// bodyclose はヘルパ（drainAndClose）経由のクローズを追跡できないが、
+		// 下の全分岐で drainAndClose によりクローズされている。
+		resp, err := c.httpClient.Do(req) //nolint:bodyclose
 		if err != nil {
+			// CheckRedirect 失敗時は非 nil の resp（Body はクローズ済み）と err が
+			// 同時に返り得るため、念のため明示的に始末する。
+			if resp != nil {
+				drainAndClose(resp.Body)
+			}
 			// クロスホストリダイレクト拒否はリトライしても結果が変わらない。
 			if errors.Is(err, errCrossHost) {
 				return err

@@ -23,11 +23,17 @@ import (
 //   - フォーム: grant_type=client_credentials, client_id, client_assertion_type=...jwt-bearer,
 //     client_assertion, scope=business.api|school.api（本実装はボディ送信。RFC 7521 準拠で URL クエリでも可）
 //   - アクセストークン有効期限 60分
+//
+// アサーションはトークン取得のたびに新規生成するため、exp は Apple の上限
+// （180日）ではなく短い TTL を使う。漏えい（プロキシのログ等）時に第三者が
+// それを使い続けられる窓を縮めるための措置。クロックスキュー対策として
+// iat を少し過去に補正する。
 const (
-	tokenURL     = "https://account.apple.com/auth/oauth2/token"
-	audienceURL  = "https://account.apple.com/auth/oauth2/v2/token"
-	assertionTTL = 180 * 24 * time.Hour
-	tokenSkew    = 5 * time.Minute
+	tokenURL         = "https://account.apple.com/auth/oauth2/token"
+	audienceURL      = "https://account.apple.com/auth/oauth2/v2/token"
+	assertionTTL     = 10 * time.Minute
+	assertionIatSkew = 30 * time.Second
+	tokenSkew        = 5 * time.Minute
 )
 
 // Credentials are the credentials issued in the Apple Business / School Manager portal.
@@ -133,7 +139,7 @@ func buildClientAssertion(c Credentials) (string, error) {
 		"iss": c.issuer(),
 		"sub": c.ClientID,
 		"aud": audienceURL,
-		"iat": now.Unix(),
+		"iat": now.Add(-assertionIatSkew).Unix(),
 		"exp": now.Add(assertionTTL).Unix(),
 		"jti": jti,
 	}
