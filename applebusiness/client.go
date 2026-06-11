@@ -144,7 +144,10 @@ func (c *Client) AccessToken() (string, time.Time, error) {
 func (c *Client) BaseURL() string { return c.baseURL }
 
 // Do sends a request to the given absolute URL and decodes the response into out.
-// 429 / 5xx responses are retried with exponential backoff (honoring Retry-After).
+// 429 / 5xx responses are retried with exponential backoff (honoring Retry-After),
+// with one exception: POST requests are retried only on 429. A 5xx (or a network
+// error) after a POST may mean the server already committed the write, so
+// retrying could execute it twice; those errors are returned immediately.
 // It is normally used by service packages through List/Get/Create.
 //
 // Because the bearer token is attached to every request, rawurl must point at
@@ -183,6 +186,11 @@ func (c *Client) Do(ctx context.Context, method, rawurl string, body []byte, out
 			if errors.Is(err, errCrossHost) {
 				return err
 			}
+			// POST はレスポンス未受領でもサーバ側で処理済みの可能性があり、
+			// 再送すると二重実行になり得るため再試行しない。
+			if method == http.MethodPost {
+				return err
+			}
 			lastErr = err
 			if attempt == c.maxRetries || !sleepBackoff(ctx, attempt, 0) {
 				return err
@@ -190,7 +198,11 @@ func (c *Client) Do(ctx context.Context, method, rawurl string, body []byte, out
 			continue
 		}
 
-		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+		// 429 は「処理されなかった」ことが確実なので全メソッドで再試行する。
+		// 5xx は処理済みの可能性があるため、非冪等な POST では再試行しない。
+		retryable := resp.StatusCode == http.StatusTooManyRequests ||
+			(resp.StatusCode >= 500 && method != http.MethodPost)
+		if retryable {
 			wait := retryAfter(resp)
 			drainAndClose(resp.Body)
 			lastErr = &APIError{StatusCode: resp.StatusCode}
@@ -321,6 +333,11 @@ func Relationship(ctx context.Context, c *Client, path string) ([]Data, error) {
 }
 
 // Create creates a resource with POST and returns the data from the SingleResponse.
+//
+// POST is not idempotent: Create retries only on 429 (where the server is
+// known not to have processed the request). On 5xx or network errors the
+// error is returned without retrying — re-run only after confirming the
+// resource was not created.
 func Create[A any](ctx context.Context, c *Client, path string, body any) (*ResourceObject[A], error) {
 	raw, err := json.Marshal(body)
 	if err != nil {

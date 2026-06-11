@@ -408,6 +408,89 @@ func TestRetryThenSuccess(t *testing.T) {
 	}
 }
 
+func TestPostNotRetriedOn5xx(t *testing.T) {
+	tok := startTokenServer(t, nil)
+	var calls int
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		writeJSONResp(t, w, http.StatusInternalServerError, map[string]any{
+			"errors": []map[string]any{{"status": "500", "code": "INTERNAL", "title": "boom", "detail": "server broke"}},
+		})
+	}))
+	t.Cleanup(api.Close)
+
+	c := newTestClient(t, api.URL, tok.URL, WithMaxRetries(3))
+	_, err := Create[testAttrs](context.Background(), c, "/v1/things",
+		map[string]any{"data": map[string]any{"type": "thing"}})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var ae *APIError
+	if !errors.As(err, &ae) || ae.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("err = %v, want APIError 500", err)
+	}
+	if len(ae.Errors) == 0 || ae.Errors[0].Code != "INTERNAL" {
+		t.Fatalf("expected decoded error body, got %+v", ae)
+	}
+	if calls != 1 {
+		t.Fatalf("POST attempted %d times, want exactly 1", calls)
+	}
+}
+
+func TestPostRetriedOn429(t *testing.T) {
+	tok := startTokenServer(t, nil)
+	var calls int
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		if calls == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		writeJSONResp(t, w, http.StatusOK, SingleResponse[testAttrs]{
+			Data: ResourceObject[testAttrs]{Type: "thing", ID: "1", Attributes: testAttrs{Name: "ok"}},
+		})
+	}))
+	t.Cleanup(api.Close)
+
+	c := newTestClient(t, api.URL, tok.URL, WithMaxRetries(2))
+	obj, err := Create[testAttrs](context.Background(), c, "/v1/things",
+		map[string]any{"data": map[string]any{"type": "thing"}})
+	if err != nil {
+		t.Fatalf("Create after 429: %v", err)
+	}
+	if obj.Attributes.Name != "ok" {
+		t.Fatalf("unexpected: %+v", obj)
+	}
+	if calls != 2 {
+		t.Fatalf("POST attempted %d times, want 2", calls)
+	}
+}
+
+func TestGetRetriedOn500(t *testing.T) {
+	tok := startTokenServer(t, nil)
+	var calls int
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		if calls == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		writeJSONResp(t, w, http.StatusOK, SingleResponse[testAttrs]{
+			Data: ResourceObject[testAttrs]{Type: "thing", ID: "1", Attributes: testAttrs{Name: "ok"}},
+		})
+	}))
+	t.Cleanup(api.Close)
+
+	c := newTestClient(t, api.URL, tok.URL, WithMaxRetries(2))
+	obj, err := Get[testAttrs](context.Background(), c, "/v1/things/1")
+	if err != nil {
+		t.Fatalf("Get after 500: %v", err)
+	}
+	if obj.Attributes.Name != "ok" || calls != 2 {
+		t.Fatalf("obj=%+v calls=%d", obj, calls)
+	}
+}
+
 func TestRateLimitedExhausted(t *testing.T) {
 	tok := startTokenServer(t, nil)
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

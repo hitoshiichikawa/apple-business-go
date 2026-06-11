@@ -4,6 +4,22 @@
 
 ## [Unreleased]
 
+### Changed
+- **リトライ方針の変更（#11）**: 非冪等な POST は 429 のみ再試行し、5xx・ネットワークエラーでは再試行せず即エラーを返すように変更（書き込み二重実行の防止）。GET/PATCH/DELETE は従来どおり 429/5xx で再試行。
+- **同一オリジン制限（#10）**: `Client` が発行する全リクエスト（`links.next` 追従・リダイレクト含む）の宛先を base URL と同一の scheme+host に制限。違反時はリクエスト送信前にエラー。不正な base URL は `NewClient` が即座にエラーを返す。
+- JWT クライアントアサーションの有効期限を 180 日から 10 分に短縮（#12）。毎回新規生成のため公開挙動への影響はなく、漏えい時の再利用窓を縮小。
+
+### Added
+- `applebusiness.ErrorObject`: `APIError.Errors` 要素の公開 named type（#16）。
+- `APIError.RawBody`: JSON:API 形式でないエラーボディの先頭断片を保持し `Error()` にも表示（#16）。
+
+### Fixed
+- レスポンスボディを読み切ってから Close し、keep-alive 接続が再利用されるように（#15）。
+- レスポンスボディの読み取りに上限を設定（成功時 32 MiB / エラー時 64 KiB）（#14）。
+- `blueprints` の関係名 `rel` を既知の値（`Rel*` 定数）に検証し、不正値はリクエスト送信前にエラー（#14）。
+- `auditevents.ListRange` が引数の `url.Values` を変更しないように（#14）。
+- `newJTI` が乱数取得エラーを無視しないように（#14）。
+
 ## [0.3.2] - 2026-06-03
 
 ### Changed

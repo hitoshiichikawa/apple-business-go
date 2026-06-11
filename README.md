@@ -189,7 +189,7 @@ endpoint details are in [`docs/apple-business-api-reference.md`](./docs/apple-bu
 - [x] Typed error predicates (`IsNotFound`/`IsRateLimited`/`IsUnauthorized`/`IsForbidden`/`IsConflict`)
 - [x] `ListSeq` (lazy paging via Go 1.23 range-over-func)
 - [x] Unit tests (`httptest`) for all packages / CHANGELOG / golangci-lint / CI (gofmt, vet, build, test -race, lint)
-- [ ] Idempotency review of write retries (avoid duplicate POSTs)
+- [x] Idempotency review of write retries: POST is retried only on 429; 5xx / network errors on POST return immediately (other methods retry on 429/5xx as before)
 - [ ] `brand` / `support` packages (future; `brand` has no public API spec yet — see [`ROADMAP.md`](./ROADMAP.md))
 
 ---
