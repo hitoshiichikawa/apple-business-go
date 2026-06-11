@@ -2,82 +2,34 @@ package configurations
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/hitoshiichikawa/apple-business-go/applebusiness"
+	"github.com/hitoshiichikawa/apple-business-go/internal/testutil"
 )
-
-func testKeyPEM(t *testing.T) []byte {
-	t.Helper()
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	der, err := x509.MarshalECPrivateKey(key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der})
-}
-
-func newClient(t *testing.T, h http.Handler) *applebusiness.Client {
-	t.Helper()
-	api := httptest.NewServer(h)
-	t.Cleanup(api.Close)
-	tok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"access_token":"t","token_type":"Bearer","expires_in":3600}`))
-	}))
-	t.Cleanup(tok.Close)
-	c, err := applebusiness.NewClient(applebusiness.Config{Credentials: applebusiness.Credentials{
-		ClientID:   "BUSINESSAPI.test",
-		TeamID:     "BUSINESSAPI.test",
-		KeyID:      "kid",
-		PrivateKey: testKeyPEM(t),
-	}}, applebusiness.WithBaseURL(api.URL), applebusiness.WithTokenURL(tok.URL))
-	if err != nil {
-		t.Fatalf("NewClient: %v", err)
-	}
-	return c
-}
-
-func writeJSON(t *testing.T, w http.ResponseWriter, status int, v any) {
-	t.Helper()
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(v); err != nil {
-		t.Fatal(err)
-	}
-}
 
 func TestConfigurationListGet(t *testing.T) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.URL.Path == "/v1/configurations" && r.Method == http.MethodGet:
-			writeJSON(t, w, http.StatusOK, applebusiness.ListResponse[Attributes]{
+			testutil.WriteJSON(t, w, http.StatusOK, applebusiness.ListResponse[Attributes]{
 				Data: []applebusiness.ResourceObject[Attributes]{
 					{Type: "configurations", ID: "C1", Attributes: Attributes{Type: TypeCustomSetting, Name: "WiFi", CustomSettingsValues: &CustomSettingsValues{Filename: "wifi.mobileconfig"}}},
 				},
 			})
 		case strings.HasPrefix(r.URL.Path, "/v1/configurations/") && r.Method == http.MethodGet:
 			id := strings.TrimPrefix(r.URL.Path, "/v1/configurations/")
-			writeJSON(t, w, http.StatusOK, applebusiness.SingleResponse[Attributes]{
+			testutil.WriteJSON(t, w, http.StatusOK, applebusiness.SingleResponse[Attributes]{
 				Data: applebusiness.ResourceObject[Attributes]{Type: "configurations", ID: id, Attributes: Attributes{Type: TypeCustomSetting, Name: "WiFi"}},
 			})
 		default:
 			http.Error(w, "not found: "+r.URL.Path, http.StatusNotFound)
 		}
 	})
-	c := newClient(t, h)
+	c := testutil.NewClient(t, h)
 	svc := New(c)
 
 	list, err := svc.List(context.Background(), nil)
@@ -121,11 +73,11 @@ func TestConfigurationCreate(t *testing.T) {
 			return
 		}
 		_ = json.NewDecoder(r.Body).Decode(&got)
-		writeJSON(t, w, http.StatusCreated, applebusiness.SingleResponse[Attributes]{
+		testutil.WriteJSON(t, w, http.StatusCreated, applebusiness.SingleResponse[Attributes]{
 			Data: applebusiness.ResourceObject[Attributes]{Type: "configurations", ID: "C9", Attributes: Attributes{Type: TypeCustomSetting, Name: "New"}},
 		})
 	})
-	c := newClient(t, h)
+	c := testutil.NewClient(t, h)
 	cfg, err := New(c).Create(context.Background(), CreateInput{
 		Name:                 "New",
 		ConfigurationProfile: "<plist/>",
@@ -164,11 +116,11 @@ func TestConfigurationUpdateDelete(t *testing.T) {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&b)
 		upName, upID = b.Data.Attributes.Name, b.Data.ID
-		writeJSON(t, w, http.StatusOK, applebusiness.SingleResponse[Attributes]{
+		testutil.WriteJSON(t, w, http.StatusOK, applebusiness.SingleResponse[Attributes]{
 			Data: applebusiness.ResourceObject[Attributes]{Type: "configurations", ID: "C1", Attributes: Attributes{Name: "N2"}},
 		})
 	})
-	c := newClient(t, hUp)
+	c := testutil.NewClient(t, hUp)
 	newName := "N2"
 	if _, err := New(c).Update(context.Background(), "C1", UpdateInput{Name: &newName}); err != nil {
 		t.Fatal(err)
@@ -186,7 +138,7 @@ func TestConfigurationUpdateDelete(t *testing.T) {
 		delMethod, delPath = r.Method, r.URL.Path
 		w.WriteHeader(http.StatusNoContent)
 	})
-	c2 := newClient(t, hDel)
+	c2 := testutil.NewClient(t, hDel)
 	if err := New(c2).Delete(context.Background(), "C1"); err != nil {
 		t.Fatal(err)
 	}
