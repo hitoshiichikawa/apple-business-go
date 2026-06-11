@@ -1,6 +1,7 @@
 package applebusiness
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -405,6 +406,27 @@ func TestRetryThenSuccess(t *testing.T) {
 	}
 	if calls < 2 {
 		t.Fatalf("expected at least 2 calls, got %d", calls)
+	}
+}
+
+func TestDoRejectsOversizedResponse(t *testing.T) {
+	old := maxResponseBytes
+	maxResponseBytes = 1024
+	t.Cleanup(func() { maxResponseBytes = old })
+
+	tok := startTokenServer(t, nil)
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"type":"thing","id":"1","attributes":{"name":"`))
+		_, _ = w.Write(bytes.Repeat([]byte("x"), 4096))
+		_, _ = w.Write([]byte(`"}}}`))
+	}))
+	t.Cleanup(api.Close)
+
+	c := newTestClient(t, api.URL, tok.URL)
+	_, err := Get[testAttrs](context.Background(), c, "/v1/things/1")
+	if err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("err = %v, want response-size-limit error", err)
 	}
 }
 

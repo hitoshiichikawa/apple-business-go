@@ -124,6 +124,10 @@ func (s *tokenSource) Token() (*oauth2.Token, error) {
 }
 
 func buildClientAssertion(c Credentials) (string, error) {
+	jti, err := newJTI()
+	if err != nil {
+		return "", err
+	}
 	now := time.Now()
 	claims := jwt.MapClaims{
 		"iss": c.issuer(),
@@ -131,7 +135,7 @@ func buildClientAssertion(c Credentials) (string, error) {
 		"aud": audienceURL,
 		"iat": now.Unix(),
 		"exp": now.Add(assertionTTL).Unix(),
-		"jti": newJTI(),
+		"jti": jti,
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
 	token.Header["kid"] = c.KeyID
@@ -147,10 +151,14 @@ func buildClientAssertion(c Credentials) (string, error) {
 	return signed, nil
 }
 
-func newJTI() string {
+func newJTI() (string, error) {
 	var b [16]byte
-	_, _ = rand.Read(b[:])
+	if _, err := rand.Read(b[:]); err != nil {
+		// Go 1.24+ では rand.Read は失敗しない仕様だが、最低サポートの 1.23 では
+		// 失敗し得る。固定値の jti を出さないようエラーとして伝播する。
+		return "", fmt.Errorf("applebusiness oauth: generate jti: %w", err)
+	}
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80
-	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]), nil
 }

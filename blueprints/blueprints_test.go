@@ -182,3 +182,31 @@ func TestBlueprintRelationshipModify(t *testing.T) {
 		})
 	}
 }
+
+func TestRelValidation(t *testing.T) {
+	requested := false
+	c := testutil.NewClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requested = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	s := New(c)
+	ctx := context.Background()
+
+	if _, err := s.RelationshipIDs(ctx, "bp1", "orgDevices/../x"); err == nil {
+		t.Fatal("RelationshipIDs: expected error for unknown rel")
+	}
+	if err := s.AddTo(ctx, "bp1", "evil", []string{"d1"}); err == nil {
+		t.Fatal("AddTo: expected error for unknown rel")
+	}
+	if err := s.Replace(ctx, "bp1", "", []string{"d1"}); err == nil {
+		t.Fatal("Replace: expected error for empty rel")
+	}
+	if requested {
+		t.Fatal("no request must be sent for an invalid rel")
+	}
+
+	// 既知の Rel* 定数は従来どおり通る。
+	if err := s.AddTo(ctx, "bp1", RelOrgDevices, nil); err != nil {
+		t.Fatalf("AddTo with valid rel (empty ids): %v", err)
+	}
+}

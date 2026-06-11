@@ -219,7 +219,11 @@ func (c *Client) Do(ctx context.Context, method, rawurl string, body []byte, out
 
 		if out != nil {
 			defer drainAndClose(resp.Body)
-			if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+			lr := &io.LimitedReader{R: resp.Body, N: maxResponseBytes + 1}
+			if err := json.NewDecoder(lr).Decode(out); err != nil {
+				if lr.N <= 0 {
+					return fmt.Errorf("applebusiness: response body exceeds %d bytes", maxResponseBytes)
+				}
 				return fmt.Errorf("applebusiness: decode response: %w", err)
 			}
 		} else {
@@ -230,11 +234,19 @@ func (c *Client) Do(ctx context.Context, method, rawurl string, body []byte, out
 	return lastErr
 }
 
-// drainAndClose reads the body to EOF before closing so the underlying
+// 異常応答（巨大ボディ）からの保護。正常なページ応答には十分すぎる上限を取る。
+// テストから差し替えるため var にしている。
+var maxResponseBytes int64 = 32 << 20 // 32 MiB
+
+// drainAndClose 時に読み捨てる最大量。残りがこれを超える場合は接続再利用を
+// 諦めて Close する（無制限に読み捨てない）。
+const maxDrainBytes = 1 << 20 // 1 MiB
+
+// drainAndClose reads the body (bounded) before closing so the underlying
 // keep-alive connection can be reused (a partially read body forces the
 // transport to discard the connection).
 func drainAndClose(body io.ReadCloser) {
-	_, _ = io.Copy(io.Discard, body)
+	_, _ = io.Copy(io.Discard, io.LimitReader(body, maxDrainBytes))
 	_ = body.Close()
 }
 

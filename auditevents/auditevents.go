@@ -207,14 +207,16 @@ func (s *Service) List(ctx context.Context, q url.Values) ([]AuditEvent, error) 
 
 // ListRange retrieves audit events within a time range (all pages).
 // start maps to filter[startTimestamp] (required); end maps to filter[endTimestamp] (omitted when zero).
-// Both are sent as UTC RFC3339 (ISO8601). Additional filters can be passed via q (may be nil).
+// Both are sent as UTC RFC3339 (ISO8601). Additional filters can be passed via q
+// (may be nil); the caller's q is not modified.
 func (s *Service) ListRange(ctx context.Context, start, end time.Time, q url.Values) ([]AuditEvent, error) {
-	if q == nil {
-		q = url.Values{}
+	merged := make(url.Values, len(q)+2)
+	for k, v := range q {
+		merged[k] = v
 	}
-	q.Set("filter[startTimestamp]", start.UTC().Format(time.RFC3339))
+	merged.Set("filter[startTimestamp]", start.UTC().Format(time.RFC3339))
 	if !end.IsZero() {
-		q.Set("filter[endTimestamp]", end.UTC().Format(time.RFC3339))
+		merged.Set("filter[endTimestamp]", end.UTC().Format(time.RFC3339))
 	}
-	return applebusiness.List[Attributes](ctx, s.c, "/v1/auditEvents", q)
+	return applebusiness.List[Attributes](ctx, s.c, "/v1/auditEvents", merged)
 }

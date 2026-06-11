@@ -3,6 +3,7 @@ package auditevents
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"testing"
 	"time"
 
@@ -137,5 +138,26 @@ func TestPayloadAccountRoleLocationChanged(t *testing.T) {
 	if len(p.AccountRoleLocationList) != 1 || p.AccountRoleLocationList[0].RoleName != "ADMINISTRATOR" ||
 		p.AccountRoleLocationList[0].LocationUniqueIdentifier != "LOC1" {
 		t.Fatalf("payload: %+v", p)
+	}
+}
+
+func TestListRangeDoesNotMutateQuery(t *testing.T) {
+	c := testutil.NewClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}))
+	s := New(c)
+
+	q := url.Values{"limit": {"5"}}
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	if _, err := s.ListRange(context.Background(), start, time.Time{}, q); err != nil {
+		t.Fatalf("ListRange: %v", err)
+	}
+	if len(q) != 1 || q.Get("limit") != "5" {
+		t.Fatalf("caller url.Values was mutated: %v", q)
+	}
+	// nil の q も従来どおり許容される。
+	if _, err := s.ListRange(context.Background(), start, time.Time{}, nil); err != nil {
+		t.Fatalf("ListRange(nil q): %v", err)
 	}
 }
