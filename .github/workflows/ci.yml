@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# CI は読み取りのみで動かす（GITHUB_TOKEN の最小権限化）
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -45,3 +49,15 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
+
+  vuln:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      # govulncheck 自体のビルドに新しめの Go が要るため stable を使う。
+      # モジュールの最低 Go (1.23) でのビルド可否は build ジョブが担保する。
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
