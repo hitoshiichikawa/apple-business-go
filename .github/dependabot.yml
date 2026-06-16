@@ -9,9 +9,11 @@ updates:
     commit-message:
       prefix: "chore"
     ignore:
-      # x/oauth2 0.22.0+ は go 1.24/1.25 を要求し、SDK の最低 Go 1.23（range-over-func）を
-      # 超えてしまうため見送る。SDK が go を上げたらこの ignore を外す。
+      # x/oauth2 は v0.31.0+ が go 1.24 を、v0.36.0+ が go 1.25 を要求し、SDK の最低 Go 1.23
+      # （range-over-func）を超えるため、v0.31.0 以降のみ見送る（v0.30.0 までは go 1.23.0 互換）。
+      # SDK が go を上げたらこの ignore を外す。
       - dependency-name: "golang.org/x/oauth2"
+        versions: [">=0.31.0"]
 
   # GitHub Actions の更新
   - package-ecosystem: "github-actions"
