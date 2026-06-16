@@ -23,11 +23,17 @@ import (
 //   - フォーム: grant_type=client_credentials, client_id, client_assertion_type=...jwt-bearer,
 //     client_assertion, scope=business.api|school.api（本実装はボディ送信。RFC 7521 準拠で URL クエリでも可）
 //   - アクセストークン有効期限 60分
+//
+// アサーションはトークン取得のたびに新規生成するため、exp は Apple の上限
+// （180日）ではなく短い TTL を使う。漏えい（プロキシのログ等）時に第三者が
+// それを使い続けられる窓を縮めるための措置。クロックスキュー対策として
+// iat を少し過去に補正する。
 const (
-	tokenURL     = "https://account.apple.com/auth/oauth2/token"
-	audienceURL  = "https://account.apple.com/auth/oauth2/v2/token"
-	assertionTTL = 180 * 24 * time.Hour
-	tokenSkew    = 5 * time.Minute
+	tokenURL         = "https://account.apple.com/auth/oauth2/token"
+	audienceURL      = "https://account.apple.com/auth/oauth2/v2/token"
+	assertionTTL     = 10 * time.Minute
+	assertionIatSkew = 30 * time.Second
+	tokenSkew        = 5 * time.Minute
 )
 
 // Credentials are the credentials issued in the Apple Business / School Manager portal.
@@ -124,14 +130,18 @@ func (s *tokenSource) Token() (*oauth2.Token, error) {
 }
 
 func buildClientAssertion(c Credentials) (string, error) {
+	jti, err := newJTI()
+	if err != nil {
+		return "", err
+	}
 	now := time.Now()
 	claims := jwt.MapClaims{
 		"iss": c.issuer(),
 		"sub": c.ClientID,
 		"aud": audienceURL,
-		"iat": now.Unix(),
+		"iat": now.Add(-assertionIatSkew).Unix(),
 		"exp": now.Add(assertionTTL).Unix(),
-		"jti": newJTI(),
+		"jti": jti,
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
 	token.Header["kid"] = c.KeyID
@@ -147,10 +157,14 @@ func buildClientAssertion(c Credentials) (string, error) {
 	return signed, nil
 }
 
-func newJTI() string {
+func newJTI() (string, error) {
 	var b [16]byte
-	_, _ = rand.Read(b[:])
+	if _, err := rand.Read(b[:]); err != nil {
+		// Go 1.24+ では rand.Read は失敗しない仕様だが、最低サポートの 1.23 では
+		// 失敗し得る。固定値の jti を出さないようエラーとして伝播する。
+		return "", fmt.Errorf("applebusiness oauth: generate jti: %w", err)
+	}
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80
-	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]), nil
 }

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -34,10 +35,21 @@ type Config struct {
 // Service packages such as devices and people accept this Client and operate on it.
 type Client struct {
 	baseURL    string
+	origin     *url.URL // parsed baseURL; every request must match its scheme+host
 	httpClient *http.Client
 	maxRetries int
 	userAgent  string
 	ts         oauth2.TokenSource
+}
+
+// errCrossHost guards the bearer token: the oauth2 transport attaches it to
+// every request this client makes, so requests whose scheme/host differ from
+// the base URL (a poisoned links.next, a redirect to another origin, ...) are
+// refused before anything is sent.
+var errCrossHost = errors.New("applebusiness: refusing cross-host request")
+
+func sameOrigin(u, origin *url.URL) bool {
+	return strings.EqualFold(u.Scheme, origin.Scheme) && strings.EqualFold(u.Host, origin.Host)
 }
 
 // NewClient creates an authenticated client.
@@ -79,6 +91,11 @@ func NewClient(cfg Config, opts ...Option) (*Client, error) {
 		o.maxRetries = 4
 	}
 
+	origin, err := url.Parse(o.baseURL)
+	if err != nil || origin.Scheme == "" || origin.Host == "" {
+		return nil, fmt.Errorf("applebusiness: invalid base URL %q", o.baseURL)
+	}
+
 	// Transport for API calls. When WithHTTPClient is supplied, its Transport /
 	// Timeout are used as the base; the token-injecting oauth2.Transport is kept
 	// on top.
@@ -93,11 +110,23 @@ func NewClient(cfg Config, opts ...Option) (*Client, error) {
 		}
 	}
 
+	// oauth2.Transport はリダイレクトの各ホップでもトークンを再付与するため、
+	// net/http 標準の「クロスホスト時に Authorization を落とす」保護が効かない。
+	// CheckRedirect で同一オリジン以外への追従を拒否してトークン送出を防ぐ。
 	httpClient := &http.Client{
 		Timeout:   apiTimeout,
 		Transport: &oauth2.Transport{Source: ts, Base: base},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if !sameOrigin(req.URL, origin) {
+				return fmt.Errorf("%w: redirect to %q (base %q)", errCrossHost, req.URL, o.baseURL)
+			}
+			if len(via) >= 10 {
+				return errors.New("applebusiness: stopped after 10 redirects")
+			}
+			return nil
+		},
 	}
-	return &Client{baseURL: o.baseURL, httpClient: httpClient, maxRetries: o.maxRetries, userAgent: o.userAgent, ts: ts}, nil
+	return &Client{baseURL: o.baseURL, origin: origin, httpClient: httpClient, maxRetries: o.maxRetries, userAgent: o.userAgent, ts: ts}, nil
 }
 
 // AccessToken returns the current access token (issuing a new one if needed) and its expiry.
@@ -115,9 +144,24 @@ func (c *Client) AccessToken() (string, time.Time, error) {
 func (c *Client) BaseURL() string { return c.baseURL }
 
 // Do sends a request to the given absolute URL and decodes the response into out.
-// 429 / 5xx responses are retried with exponential backoff (honoring Retry-After).
+// 429 / 5xx responses are retried with exponential backoff (honoring Retry-After),
+// with one exception: POST requests are retried only on 429. A 5xx (or a network
+// error) after a POST may mean the server already committed the write, so
+// retrying could execute it twice; those errors are returned immediately.
 // It is normally used by service packages through List/Get/Create.
+//
+// Because the bearer token is attached to every request, rawurl must point at
+// the same scheme+host as the client's base URL; anything else (including
+// redirects to another origin) is refused before the request is sent.
 func (c *Client) Do(ctx context.Context, method, rawurl string, body []byte, out any) error {
+	u, err := url.Parse(rawurl)
+	if err != nil {
+		return fmt.Errorf("applebusiness: parse request URL: %w", err)
+	}
+	if !sameOrigin(u, c.origin) {
+		return fmt.Errorf("%w: %q (base %q)", errCrossHost, rawurl, c.baseURL)
+	}
+
 	var lastErr error
 	for attempt := 0; attempt <= c.maxRetries; attempt++ {
 		var reader io.Reader
@@ -136,8 +180,24 @@ func (c *Client) Do(ctx context.Context, method, rawurl string, body []byte, out
 			req.Header.Set("Content-Type", "application/json")
 		}
 
-		resp, err := c.httpClient.Do(req)
+		// bodyclose はヘルパ（drainAndClose）経由のクローズを追跡できないが、
+		// 下の全分岐で drainAndClose によりクローズされている。
+		resp, err := c.httpClient.Do(req) //nolint:bodyclose
 		if err != nil {
+			// CheckRedirect 失敗時は非 nil の resp（Body はクローズ済み）と err が
+			// 同時に返り得るため、念のため明示的に始末する。
+			if resp != nil {
+				drainAndClose(resp.Body)
+			}
+			// クロスホストリダイレクト拒否はリトライしても結果が変わらない。
+			if errors.Is(err, errCrossHost) {
+				return err
+			}
+			// POST はレスポンス未受領でもサーバ側で処理済みの可能性があり、
+			// 再送すると二重実行になり得るため再試行しない。
+			if method == http.MethodPost {
+				return err
+			}
 			lastErr = err
 			if attempt == c.maxRetries || !sleepBackoff(ctx, attempt, 0) {
 				return err
@@ -145,9 +205,13 @@ func (c *Client) Do(ctx context.Context, method, rawurl string, body []byte, out
 			continue
 		}
 
-		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+		// 429 は「処理されなかった」ことが確実なので全メソッドで再試行する。
+		// 5xx は処理済みの可能性があるため、非冪等な POST では再試行しない。
+		retryable := resp.StatusCode == http.StatusTooManyRequests ||
+			(resp.StatusCode >= 500 && method != http.MethodPost)
+		if retryable {
 			wait := retryAfter(resp)
-			_ = resp.Body.Close()
+			drainAndClose(resp.Body)
 			lastErr = &APIError{StatusCode: resp.StatusCode}
 			if attempt == c.maxRetries || !sleepBackoff(ctx, attempt, wait) {
 				return lastErr
@@ -156,41 +220,83 @@ func (c *Client) Do(ctx context.Context, method, rawurl string, body []byte, out
 		}
 
 		if resp.StatusCode >= 400 {
-			defer func() { _ = resp.Body.Close() }()
+			defer drainAndClose(resp.Body)
 			return decodeAPIError(resp)
 		}
 
 		if out != nil {
-			defer func() { _ = resp.Body.Close() }()
-			if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+			defer drainAndClose(resp.Body)
+			lr := &io.LimitedReader{R: resp.Body, N: maxResponseBytes + 1}
+			if err := json.NewDecoder(lr).Decode(out); err != nil {
+				if lr.N <= 0 {
+					return fmt.Errorf("applebusiness: response body exceeds %d bytes", maxResponseBytes)
+				}
 				return fmt.Errorf("applebusiness: decode response: %w", err)
 			}
 		} else {
-			_ = resp.Body.Close()
+			drainAndClose(resp.Body)
 		}
 		return nil
 	}
 	return lastErr
 }
 
+// 異常応答（巨大ボディ）からの保護。正常なページ応答には十分すぎる上限を取る。
+// テストから差し替えるため var にしている。
+var maxResponseBytes int64 = 32 << 20 // 32 MiB
+
+// drainAndClose 時に読み捨てる最大量。残りがこれを超える場合は接続再利用を
+// 諦めて Close する（無制限に読み捨てない）。
+const maxDrainBytes = 1 << 20 // 1 MiB
+
+// drainAndClose reads the body (bounded) before closing so the underlying
+// keep-alive connection can be reused (a partially read body forces the
+// transport to discard the connection).
+func drainAndClose(body io.ReadCloser) {
+	_, _ = io.Copy(io.Discard, io.LimitReader(body, maxDrainBytes))
+	_ = body.Close()
+}
+
+// ---------------------------------------------------------------------------
+// 内部ヘルパ
+// ---------------------------------------------------------------------------
+
 // ---------------------------------------------------------------------------
 // 汎用リクエストヘルパ（サービスパッケージから利用）
 // ---------------------------------------------------------------------------
 
+// pager is satisfied by page-shaped responses that carry a links.next URL.
+// followPages is the single place that walks a links.next chain; List / ListSeq /
+// Relationship are all built on top of it.
+type pager interface{ nextLink() string }
+
+func (r ListResponse[A]) nextLink() string      { return r.Links.Next }
+func (r RelationshipResponse) nextLink() string { return r.Links.Next }
+
+// followPages GETs endpoint, decodes each page into P and hands it to handle,
+// following links.next until exhausted. handle returns false to stop early.
+func followPages[P pager](ctx context.Context, c *Client, endpoint string, handle func(P) bool) error {
+	for endpoint != "" {
+		var page P
+		if err := c.Do(ctx, http.MethodGet, endpoint, nil, &page); err != nil {
+			return err
+		}
+		if !handle(page) {
+			return nil
+		}
+		endpoint = page.nextLink()
+	}
+	return nil
+}
+
 // List walks a list endpoint following links.next until exhausted and returns all items.
 func List[A any](ctx context.Context, c *Client, path string, q url.Values) ([]ResourceObject[A], error) {
-	endpoint := c.baseURL + path
-	if len(q) > 0 {
-		endpoint += "?" + q.Encode()
-	}
 	var out []ResourceObject[A]
-	for endpoint != "" {
-		var page ListResponse[A]
-		if err := c.Do(ctx, http.MethodGet, endpoint, nil, &page); err != nil {
+	for item, err := range ListSeq[A](ctx, c, path, q) {
+		if err != nil {
 			return nil, err
 		}
-		out = append(out, page.Data...)
-		endpoint = page.Links.Next
+		out = append(out, item)
 	}
 	return out, nil
 }
@@ -209,19 +315,17 @@ func ListSeq[A any](ctx context.Context, c *Client, path string, q url.Values) i
 		if len(q) > 0 {
 			endpoint += "?" + q.Encode()
 		}
-		for endpoint != "" {
-			var page ListResponse[A]
-			if err := c.Do(ctx, http.MethodGet, endpoint, nil, &page); err != nil {
-				var zero ResourceObject[A]
-				yield(zero, err)
-				return
-			}
+		err := followPages(ctx, c, endpoint, func(page ListResponse[A]) bool {
 			for _, item := range page.Data {
 				if !yield(item, nil) {
-					return
+					return false
 				}
 			}
-			endpoint = page.Links.Next
+			return true
+		})
+		if err != nil {
+			var zero ResourceObject[A]
+			yield(zero, err)
 		}
 	}
 }
@@ -236,20 +340,23 @@ func Get[A any](ctx context.Context, c *Client, path string) (*ResourceObject[A]
 
 // Relationship walks a relationships endpoint (an array of {type,id}) across all pages.
 func Relationship(ctx context.Context, c *Client, path string) ([]Data, error) {
-	endpoint := c.baseURL + path
 	var out []Data
-	for endpoint != "" {
-		var resp RelationshipResponse
-		if err := c.Do(ctx, http.MethodGet, endpoint, nil, &resp); err != nil {
-			return nil, err
-		}
-		out = append(out, resp.Data...)
-		endpoint = resp.Links.Next
+	err := followPages(ctx, c, c.baseURL+path, func(page RelationshipResponse) bool {
+		out = append(out, page.Data...)
+		return true
+	})
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }
 
 // Create creates a resource with POST and returns the data from the SingleResponse.
+//
+// POST is not idempotent: Create retries only on 429 (where the server is
+// known not to have processed the request). On 5xx or network errors the
+// error is returned without retrying — re-run only after confirming the
+// resource was not created.
 func Create[A any](ctx context.Context, c *Client, path string, body any) (*ResourceObject[A], error) {
 	raw, err := json.Marshal(body)
 	if err != nil {
@@ -292,10 +399,6 @@ func ModifyRelationship(ctx context.Context, c *Client, method, path string, ite
 	return c.Do(ctx, method, c.baseURL+path, raw, nil)
 }
 
-// ---------------------------------------------------------------------------
-// 内部ヘルパ / エラー
-// ---------------------------------------------------------------------------
-
 func sleepBackoff(ctx context.Context, attempt int, base time.Duration) bool {
 	d := base
 	if d <= 0 {
@@ -318,28 +421,4 @@ func retryAfter(resp *http.Response) time.Duration {
 		}
 	}
 	return 0
-}
-
-// APIError is a JSON:API error response.
-type APIError struct {
-	StatusCode int
-	Errors     []struct {
-		Status string `json:"status"`
-		Code   string `json:"code"`
-		Title  string `json:"title"`
-		Detail string `json:"detail"`
-	} `json:"errors"`
-}
-
-func (e *APIError) Error() string {
-	if len(e.Errors) > 0 {
-		return fmt.Sprintf("applebusiness: API error %d: %s - %s", e.StatusCode, e.Errors[0].Code, e.Errors[0].Detail)
-	}
-	return fmt.Sprintf("applebusiness: API error %d", e.StatusCode)
-}
-
-func decodeAPIError(resp *http.Response) error {
-	e := &APIError{StatusCode: resp.StatusCode}
-	_ = json.NewDecoder(resp.Body).Decode(e)
-	return e
 }

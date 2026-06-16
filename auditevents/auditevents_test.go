@@ -2,52 +2,13 @@ package auditevents
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/x509"
-	"encoding/pem"
 	"net/http"
-	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
-	"github.com/hitoshiichikawa/apple-business-go/applebusiness"
+	"github.com/hitoshiichikawa/apple-business-go/internal/testutil"
 )
-
-func testKeyPEM(t *testing.T) []byte {
-	t.Helper()
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	der, err := x509.MarshalECPrivateKey(key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der})
-}
-
-func newClient(t *testing.T, h http.Handler) *applebusiness.Client {
-	t.Helper()
-	api := httptest.NewServer(h)
-	t.Cleanup(api.Close)
-	tok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"access_token":"t","token_type":"Bearer","expires_in":3600}`))
-	}))
-	t.Cleanup(tok.Close)
-	c, err := applebusiness.NewClient(applebusiness.Config{Credentials: applebusiness.Credentials{
-		ClientID:   "BUSINESSAPI.test",
-		TeamID:     "BUSINESSAPI.test",
-		KeyID:      "kid",
-		PrivateKey: testKeyPEM(t),
-	}}, applebusiness.WithBaseURL(api.URL), applebusiness.WithTokenURL(tok.URL))
-	if err != nil {
-		t.Fatalf("NewClient: %v", err)
-	}
-	return c
-}
 
 // 実APIで観測した形（共通エンベロープ + eventData<Event>）。
 const auditEventsJSON = `{"data":[{"type":"auditEvents","id":"E1","attributes":{` +
@@ -67,7 +28,7 @@ func TestListRange(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(auditEventsJSON))
 	})
-	c := newClient(t, h)
+	c := testutil.NewClient(t, h)
 
 	start := time.Date(2026, 5, 26, 0, 0, 0, 0, time.UTC)
 	end := time.Date(2026, 6, 2, 0, 0, 0, 0, time.UTC)
@@ -115,7 +76,7 @@ func TestListRangeOmitsEndWhenZero(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"data":[],"links":{},"meta":{}}`))
 	})
-	c := newClient(t, h)
+	c := testutil.NewClient(t, h)
 	if _, err := New(c).ListRange(context.Background(), time.Date(2026, 5, 26, 0, 0, 0, 0, time.UTC), time.Time{}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +94,7 @@ func TestPayloadAPIAccountKey(t *testing.T) {
 		`"eventDataPropertyKey":"eventDataApiAccountCreatedWithKey",` +
 		`"eventDataApiAccountCreatedWithKey":{"keyId":"K-123"}` +
 		`}}],"links":{},"meta":{}}`
-	c := newClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	c := testutil.NewClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(body))
 	}))
@@ -159,7 +120,7 @@ func TestPayloadAccountRoleLocationChanged(t *testing.T) {
 		`"eventDataPropertyKey":"eventDataAccountRoleLocationChanged",` +
 		`"eventDataAccountRoleLocationChanged":{"accountRoleLocationList":[{"roleName":"ADMINISTRATOR","locationUniqueIdentifier":"LOC1"}]}` +
 		`}}],"links":{},"meta":{}}`
-	c := newClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	c := testutil.NewClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(body))
 	}))
@@ -177,5 +138,26 @@ func TestPayloadAccountRoleLocationChanged(t *testing.T) {
 	if len(p.AccountRoleLocationList) != 1 || p.AccountRoleLocationList[0].RoleName != "ADMINISTRATOR" ||
 		p.AccountRoleLocationList[0].LocationUniqueIdentifier != "LOC1" {
 		t.Fatalf("payload: %+v", p)
+	}
+}
+
+func TestListRangeDoesNotMutateQuery(t *testing.T) {
+	c := testutil.NewClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}))
+	s := New(c)
+
+	q := url.Values{"limit": {"5"}}
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	if _, err := s.ListRange(context.Background(), start, time.Time{}, q); err != nil {
+		t.Fatalf("ListRange: %v", err)
+	}
+	if len(q) != 1 || q.Get("limit") != "5" {
+		t.Fatalf("caller url.Values was mutated: %v", q)
+	}
+	// nil の q も従来どおり許容される。
+	if _, err := s.ListRange(context.Background(), start, time.Time{}, nil); err != nil {
+		t.Fatalf("ListRange(nil q): %v", err)
 	}
 }

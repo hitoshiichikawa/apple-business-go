@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hitoshiichikawa/apple-business-go/applebusiness"
+	"github.com/hitoshiichikawa/apple-business-go/internal/testutil"
 )
 
 func TestAssignCreatesActivity(t *testing.T) {
@@ -33,11 +34,11 @@ func TestAssignCreatesActivity(t *testing.T) {
 			return
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
-		writeJSON(t, w, http.StatusCreated, applebusiness.SingleResponse[ActivityAttributes]{
+		testutil.WriteJSON(t, w, http.StatusCreated, applebusiness.SingleResponse[ActivityAttributes]{
 			Data: applebusiness.ResourceObject[ActivityAttributes]{Type: "orgDeviceActivities", ID: "ACT1", Attributes: ActivityAttributes{Status: StatusInProgress}},
 		})
 	})
-	c := newClient(t, h)
+	c := testutil.NewClient(t, h)
 	act, err := New(c).Assign(context.Background(), "S1", []string{"D1", "D2"})
 	if err != nil {
 		t.Fatal(err)
@@ -73,11 +74,11 @@ func TestUnassignActivityType(t *testing.T) {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&b)
 		activityType = b.Data.Attributes.ActivityType
-		writeJSON(t, w, http.StatusCreated, applebusiness.SingleResponse[ActivityAttributes]{
+		testutil.WriteJSON(t, w, http.StatusCreated, applebusiness.SingleResponse[ActivityAttributes]{
 			Data: applebusiness.ResourceObject[ActivityAttributes]{Type: "orgDeviceActivities", ID: "ACT2", Attributes: ActivityAttributes{Status: StatusInProgress}},
 		})
 	})
-	c := newClient(t, h)
+	c := testutil.NewClient(t, h)
 	if _, err := New(c).Unassign(context.Background(), "S1", []string{"D1"}); err != nil {
 		t.Fatal(err)
 	}
@@ -94,11 +95,11 @@ func TestPollActivityUntilTerminal(t *testing.T) {
 		if calls >= 2 {
 			st, sub = StatusCompleted, SubStatusCompletedWithError
 		}
-		writeJSON(t, w, http.StatusOK, applebusiness.SingleResponse[ActivityAttributes]{
+		testutil.WriteJSON(t, w, http.StatusOK, applebusiness.SingleResponse[ActivityAttributes]{
 			Data: applebusiness.ResourceObject[ActivityAttributes]{Type: "orgDeviceActivities", ID: "ACT1", Attributes: ActivityAttributes{Status: st, SubStatus: sub}},
 		})
 	})
-	c := newClient(t, h)
+	c := testutil.NewClient(t, h)
 	final, err := New(c).PollActivity(context.Background(), "ACT1", time.Millisecond)
 	if err != nil {
 		t.Fatal(err)

@@ -1,6 +1,7 @@
 package applebusiness
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -8,10 +9,15 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type testAttrs struct {
@@ -290,6 +296,130 @@ func TestAPIErrorDecodeAndClassifier(t *testing.T) {
 	}
 }
 
+func TestClientAssertionShortTTL(t *testing.T) {
+	var form url.Values
+	tok := startTokenServer(t, &form)
+	api := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(api.Close)
+
+	c := newTestClient(t, api.URL, tok.URL)
+	if _, _, err := c.AccessToken(); err != nil {
+		t.Fatalf("AccessToken: %v", err)
+	}
+
+	assertion := form.Get("client_assertion")
+	if assertion == "" {
+		t.Fatal("client_assertion missing")
+	}
+	claims := jwt.MapClaims{}
+	if _, _, err := jwt.NewParser().ParseUnverified(assertion, claims); err != nil {
+		t.Fatalf("parse assertion: %v", err)
+	}
+	iat, ok1 := claims["iat"].(float64)
+	exp, ok2 := claims["exp"].(float64)
+	if !ok1 || !ok2 {
+		t.Fatalf("iat/exp missing or wrong type: %v", claims)
+	}
+	want := int64((assertionTTL + assertionIatSkew) / time.Second)
+	if got := int64(exp) - int64(iat); got != want {
+		t.Fatalf("exp-iat = %ds, want %ds (TTL %s + iat skew %s)", got, want, assertionTTL, assertionIatSkew)
+	}
+	if jti, _ := claims["jti"].(string); jti == "" {
+		t.Fatal("jti missing")
+	}
+	if aud, _ := claims["aud"].(string); aud != audienceURL {
+		t.Fatalf("aud = %q, want %q", claims["aud"], audienceURL)
+	}
+}
+
+func TestListRefusesCrossHostNext(t *testing.T) {
+	tok := startTokenServer(t, nil)
+
+	var evilCalls int
+	evil := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		evilCalls++
+		writeJSONResp(t, w, http.StatusOK, ListResponse[testAttrs]{})
+	}))
+	t.Cleanup(evil.Close)
+
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSONResp(t, w, http.StatusOK, ListResponse[testAttrs]{
+			Data:  []ResourceObject[testAttrs]{{Type: "thing", ID: "1", Attributes: testAttrs{Name: "a"}}},
+			Links: Links{Next: evil.URL + "/v1/things?cursor=2"},
+		})
+	}))
+	t.Cleanup(api.Close)
+
+	c := newTestClient(t, api.URL, tok.URL)
+	_, err := List[testAttrs](context.Background(), c, "/v1/things", nil)
+	if err == nil {
+		t.Fatal("expected error for cross-host links.next")
+	}
+	if !errors.Is(err, errCrossHost) {
+		t.Fatalf("err = %v, want errCrossHost", err)
+	}
+	if evilCalls != 0 {
+		t.Fatalf("cross-host server received %d requests, want 0", evilCalls)
+	}
+}
+
+func TestDoRefusesCrossHostRedirect(t *testing.T) {
+	tok := startTokenServer(t, nil)
+
+	var evilCalls int
+	evil := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		evilCalls++
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(evil.Close)
+
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, evil.URL+"/steal", http.StatusFound)
+	}))
+	t.Cleanup(api.Close)
+
+	c := newTestClient(t, api.URL, tok.URL, WithMaxRetries(1))
+	_, err := Get[testAttrs](context.Background(), c, "/v1/things/1")
+	if err == nil {
+		t.Fatal("expected error for cross-host redirect")
+	}
+	if !errors.Is(err, errCrossHost) {
+		t.Fatalf("err = %v, want errCrossHost", err)
+	}
+	if evilCalls != 0 {
+		t.Fatalf("cross-host server received %d requests, want 0", evilCalls)
+	}
+}
+
+func TestAPIErrorNonJSONBody(t *testing.T) {
+	tok := startTokenServer(t, nil)
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte("<html>upstream error</html>"))
+	}))
+	t.Cleanup(api.Close)
+
+	c := newTestClient(t, api.URL, tok.URL)
+	_, err := Get[testAttrs](context.Background(), c, "/v1/things/1")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var ae *APIError
+	if !errors.As(err, &ae) {
+		t.Fatalf("not an APIError: %v", err)
+	}
+	if ae.StatusCode != http.StatusBadRequest || len(ae.Errors) != 0 {
+		t.Fatalf("unexpected APIError: %+v", ae)
+	}
+	if !strings.Contains(ae.RawBody, "upstream error") {
+		t.Fatalf("RawBody = %q, want body snippet", ae.RawBody)
+	}
+	if !strings.Contains(err.Error(), "upstream error") {
+		t.Fatalf("Error() = %q, want body snippet included", err.Error())
+	}
+}
+
 func TestRetryThenSuccess(t *testing.T) {
 	tok := startTokenServer(t, nil)
 	var calls int
@@ -315,6 +445,110 @@ func TestRetryThenSuccess(t *testing.T) {
 	}
 	if calls < 2 {
 		t.Fatalf("expected at least 2 calls, got %d", calls)
+	}
+}
+
+func TestDoRejectsOversizedResponse(t *testing.T) {
+	old := maxResponseBytes
+	maxResponseBytes = 1024
+	t.Cleanup(func() { maxResponseBytes = old })
+
+	tok := startTokenServer(t, nil)
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"type":"thing","id":"1","attributes":{"name":"`))
+		_, _ = w.Write(bytes.Repeat([]byte("x"), 4096))
+		_, _ = w.Write([]byte(`"}}}`))
+	}))
+	t.Cleanup(api.Close)
+
+	c := newTestClient(t, api.URL, tok.URL)
+	_, err := Get[testAttrs](context.Background(), c, "/v1/things/1")
+	if err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("err = %v, want response-size-limit error", err)
+	}
+}
+
+func TestPostNotRetriedOn5xx(t *testing.T) {
+	tok := startTokenServer(t, nil)
+	var calls int
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		writeJSONResp(t, w, http.StatusInternalServerError, map[string]any{
+			"errors": []map[string]any{{"status": "500", "code": "INTERNAL", "title": "boom", "detail": "server broke"}},
+		})
+	}))
+	t.Cleanup(api.Close)
+
+	c := newTestClient(t, api.URL, tok.URL, WithMaxRetries(3))
+	_, err := Create[testAttrs](context.Background(), c, "/v1/things",
+		map[string]any{"data": map[string]any{"type": "thing"}})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var ae *APIError
+	if !errors.As(err, &ae) || ae.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("err = %v, want APIError 500", err)
+	}
+	if len(ae.Errors) == 0 || ae.Errors[0].Code != "INTERNAL" {
+		t.Fatalf("expected decoded error body, got %+v", ae)
+	}
+	if calls != 1 {
+		t.Fatalf("POST attempted %d times, want exactly 1", calls)
+	}
+}
+
+func TestPostRetriedOn429(t *testing.T) {
+	tok := startTokenServer(t, nil)
+	var calls int
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		if calls == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		writeJSONResp(t, w, http.StatusOK, SingleResponse[testAttrs]{
+			Data: ResourceObject[testAttrs]{Type: "thing", ID: "1", Attributes: testAttrs{Name: "ok"}},
+		})
+	}))
+	t.Cleanup(api.Close)
+
+	c := newTestClient(t, api.URL, tok.URL, WithMaxRetries(2))
+	obj, err := Create[testAttrs](context.Background(), c, "/v1/things",
+		map[string]any{"data": map[string]any{"type": "thing"}})
+	if err != nil {
+		t.Fatalf("Create after 429: %v", err)
+	}
+	if obj.Attributes.Name != "ok" {
+		t.Fatalf("unexpected: %+v", obj)
+	}
+	if calls != 2 {
+		t.Fatalf("POST attempted %d times, want 2", calls)
+	}
+}
+
+func TestGetRetriedOn500(t *testing.T) {
+	tok := startTokenServer(t, nil)
+	var calls int
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		if calls == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		writeJSONResp(t, w, http.StatusOK, SingleResponse[testAttrs]{
+			Data: ResourceObject[testAttrs]{Type: "thing", ID: "1", Attributes: testAttrs{Name: "ok"}},
+		})
+	}))
+	t.Cleanup(api.Close)
+
+	c := newTestClient(t, api.URL, tok.URL, WithMaxRetries(2))
+	obj, err := Get[testAttrs](context.Background(), c, "/v1/things/1")
+	if err != nil {
+		t.Fatalf("Get after 500: %v", err)
+	}
+	if obj.Attributes.Name != "ok" || calls != 2 {
+		t.Fatalf("obj=%+v calls=%d", obj, calls)
 	}
 }
 

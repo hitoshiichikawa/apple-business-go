@@ -2,62 +2,14 @@ package blueprints
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/hitoshiichikawa/apple-business-go/applebusiness"
+	"github.com/hitoshiichikawa/apple-business-go/internal/testutil"
 )
-
-func testKeyPEM(t *testing.T) []byte {
-	t.Helper()
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	der, err := x509.MarshalECPrivateKey(key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der})
-}
-
-func newClient(t *testing.T, h http.Handler) *applebusiness.Client {
-	t.Helper()
-	api := httptest.NewServer(h)
-	t.Cleanup(api.Close)
-	tok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"access_token":"t","token_type":"Bearer","expires_in":3600}`))
-	}))
-	t.Cleanup(tok.Close)
-	c, err := applebusiness.NewClient(applebusiness.Config{Credentials: applebusiness.Credentials{
-		ClientID:   "BUSINESSAPI.test",
-		TeamID:     "BUSINESSAPI.test",
-		KeyID:      "kid",
-		PrivateKey: testKeyPEM(t),
-	}}, applebusiness.WithBaseURL(api.URL), applebusiness.WithTokenURL(tok.URL))
-	if err != nil {
-		t.Fatalf("NewClient: %v", err)
-	}
-	return c
-}
-
-func writeJSON(t *testing.T, w http.ResponseWriter, status int, v any) {
-	t.Helper()
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(v); err != nil {
-		t.Fatal(err)
-	}
-}
 
 // writeCapture は書き込みボディの汎用キャプチャ。
 type writeCapture struct {
@@ -77,25 +29,25 @@ func TestBlueprintListGet(t *testing.T) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.URL.Path == "/v1/blueprints" && r.Method == http.MethodGet:
-			writeJSON(t, w, http.StatusOK, applebusiness.ListResponse[Attributes]{
+			testutil.WriteJSON(t, w, http.StatusOK, applebusiness.ListResponse[Attributes]{
 				Data: []applebusiness.ResourceObject[Attributes]{
 					{Type: "blueprints", ID: "BP1", Attributes: Attributes{Name: "Default", Status: StatusActive}},
 				},
 			})
 		case strings.HasSuffix(r.URL.Path, "/relationships/orgDevices"):
-			writeJSON(t, w, http.StatusOK, applebusiness.RelationshipResponse{
+			testutil.WriteJSON(t, w, http.StatusOK, applebusiness.RelationshipResponse{
 				Data: []applebusiness.Data{{Type: "orgDevices", ID: "D1"}},
 			})
 		case strings.HasPrefix(r.URL.Path, "/v1/blueprints/") && r.Method == http.MethodGet:
 			id := strings.TrimPrefix(r.URL.Path, "/v1/blueprints/")
-			writeJSON(t, w, http.StatusOK, applebusiness.SingleResponse[Attributes]{
+			testutil.WriteJSON(t, w, http.StatusOK, applebusiness.SingleResponse[Attributes]{
 				Data: applebusiness.ResourceObject[Attributes]{Type: "blueprints", ID: id, Attributes: Attributes{Name: "Default", Status: StatusActive}},
 			})
 		default:
 			http.Error(w, "not found: "+r.URL.Path, http.StatusNotFound)
 		}
 	})
-	c := newClient(t, h)
+	c := testutil.NewClient(t, h)
 	svc := New(c)
 
 	list, err := svc.List(context.Background(), nil)
@@ -131,11 +83,11 @@ func TestBlueprintCreate(t *testing.T) {
 			return
 		}
 		_ = json.NewDecoder(r.Body).Decode(&got)
-		writeJSON(t, w, http.StatusCreated, applebusiness.SingleResponse[Attributes]{
+		testutil.WriteJSON(t, w, http.StatusCreated, applebusiness.SingleResponse[Attributes]{
 			Data: applebusiness.ResourceObject[Attributes]{Type: "blueprints", ID: "BP9", Attributes: Attributes{Name: "New BP"}},
 		})
 	})
-	c := newClient(t, h)
+	c := testutil.NewClient(t, h)
 	bp, err := New(c).Create(context.Background(), CreateInput{Name: "New BP", OrgDevices: []string{"D1"}})
 	if err != nil {
 		t.Fatal(err)
@@ -163,11 +115,11 @@ func TestBlueprintUpdate(t *testing.T) {
 			return
 		}
 		_ = json.NewDecoder(r.Body).Decode(&got)
-		writeJSON(t, w, http.StatusOK, applebusiness.SingleResponse[Attributes]{
+		testutil.WriteJSON(t, w, http.StatusOK, applebusiness.SingleResponse[Attributes]{
 			Data: applebusiness.ResourceObject[Attributes]{Type: "blueprints", ID: "BP1", Attributes: Attributes{Name: "Renamed"}},
 		})
 	})
-	c := newClient(t, h)
+	c := testutil.NewClient(t, h)
 	name := "Renamed"
 	if _, err := New(c).Update(context.Background(), "BP1", UpdateInput{Name: &name}); err != nil {
 		t.Fatal(err)
@@ -183,7 +135,7 @@ func TestBlueprintDelete(t *testing.T) {
 		method, path = r.Method, r.URL.Path
 		w.WriteHeader(http.StatusNoContent)
 	})
-	c := newClient(t, h)
+	c := testutil.NewClient(t, h)
 	if err := New(c).Delete(context.Background(), "BP1"); err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +166,7 @@ func TestBlueprintRelationshipModify(t *testing.T) {
 				_ = json.NewDecoder(r.Body).Decode(&body)
 				w.WriteHeader(http.StatusNoContent)
 			})
-			c := newClient(t, h)
+			c := testutil.NewClient(t, h)
 			if err := tc.call(New(c)); err != nil {
 				t.Fatal(err)
 			}
@@ -228,5 +180,33 @@ func TestBlueprintRelationshipModify(t *testing.T) {
 				t.Fatalf("body data: %+v", body.Data)
 			}
 		})
+	}
+}
+
+func TestRelValidation(t *testing.T) {
+	requested := false
+	c := testutil.NewClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requested = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	s := New(c)
+	ctx := context.Background()
+
+	if _, err := s.RelationshipIDs(ctx, "bp1", "orgDevices/../x"); err == nil {
+		t.Fatal("RelationshipIDs: expected error for unknown rel")
+	}
+	if err := s.AddTo(ctx, "bp1", "evil", []string{"d1"}); err == nil {
+		t.Fatal("AddTo: expected error for unknown rel")
+	}
+	if err := s.Replace(ctx, "bp1", "", []string{"d1"}); err == nil {
+		t.Fatal("Replace: expected error for empty rel")
+	}
+	if requested {
+		t.Fatal("no request must be sent for an invalid rel")
+	}
+
+	// 既知の Rel* 定数は従来どおり通る。
+	if err := s.AddTo(ctx, "bp1", RelOrgDevices, nil); err != nil {
+		t.Fatalf("AddTo with valid rel (empty ids): %v", err)
 	}
 }

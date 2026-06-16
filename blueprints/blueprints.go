@@ -8,6 +8,7 @@ package blueprints
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 
@@ -62,10 +63,32 @@ func (s *Service) Get(ctx context.Context, id string) (*Blueprint, error) {
 	return applebusiness.Get[Attributes](ctx, s.c, "/v1/blueprints/"+url.PathEscape(id))
 }
 
+// validRels は URL パスへ連結を許す関係名（Rel* 定数と同値）。呼び出し側が
+// 外部入力を rel に渡してもパス操作にならないよう、未知の値は拒否する。
+var validRels = map[string]bool{
+	RelApps:           true,
+	RelConfigurations: true,
+	RelPackages:       true,
+	RelOrgDevices:     true,
+	RelUsers:          true,
+	RelUserGroups:     true,
+}
+
+func checkRel(rel string) error {
+	if !validRels[rel] {
+		return fmt.Errorf("blueprints: unknown relationship %q (use the Rel* constants)", rel)
+	}
+	return nil
+}
+
 // RelationshipIDs returns the IDs of the related resources in the given
-// relationship (all pages). Use a Rel* constant for rel. Note: this may
-// return 403 depending on permissions or state.
+// relationship (all pages). rel must be one of the Rel* constants; unknown
+// values are rejected before any request is sent. Note: this may return 403
+// depending on permissions or state.
 func (s *Service) RelationshipIDs(ctx context.Context, id, rel string) ([]applebusiness.Data, error) {
+	if err := checkRel(rel); err != nil {
+		return nil, err
+	}
 	return applebusiness.Relationship(ctx, s.c, "/v1/blueprints/"+url.PathEscape(id)+"/relationships/"+rel)
 }
 
@@ -129,6 +152,9 @@ func (s *Service) Replace(ctx context.Context, id, rel string, ids []string) err
 }
 
 func (s *Service) modifyRel(ctx context.Context, method, id, rel string, ids []string) error {
+	if err := checkRel(rel); err != nil {
+		return err
+	}
 	if len(ids) == 0 {
 		return nil
 	}
