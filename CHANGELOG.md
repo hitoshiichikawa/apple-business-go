@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-06-17
+
+### Security
+- `golang.org/x/oauth2` を v0.21.0 → v0.30.0 に更新し **CVE-2025-22868（GO-2025-3488）** を解消（#9）。Go 1.23 フロアと両立する最新版（v0.31.0+ は Go 1.24 を要求するため見送り）。dependabot の ignore は誤った前提で全更新を止めていたため、`>=0.31.0` のみ skip するよう限定。
+- CI を least-privilege 化（workflow レベルで `permissions: contents: read`）し、`govulncheck` ジョブを追加（#13）。
+
 ### Changed
 - **リトライ方針の変更（#11）**: 非冪等な POST は 429 のみ再試行し、5xx・ネットワークエラーでは再試行せず即エラーを返すように変更（書き込み二重実行の防止）。GET/PATCH/DELETE は従来どおり 429/5xx で再試行。
 - **同一オリジン制限（#10）**: `Client` が発行する全リクエスト（`links.next` 追従・リダイレクト含む）の宛先を base URL と同一の scheme+host に制限。違反時はリクエスト送信前にエラー。不正な base URL は `NewClient` が即座にエラーを返す。
