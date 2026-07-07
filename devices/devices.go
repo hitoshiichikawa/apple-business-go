@@ -71,3 +71,15 @@ func (s *Service) MdmServerDeviceList(ctx context.Context, serverID string) ([]D
 	}
 	return out, nil
 }
+
+// ListMdmDevices returns all devices enrolled in Apple's built-in device
+// management service (GET /v1/mdmDevices, pagination handled automatically).
+func (s *Service) ListMdmDevices(ctx context.Context, q url.Values) ([]MdmDevice, error) {
+	return applebusiness.List[MdmDeviceAttributes](ctx, s.c, "/v1/mdmDevices", q)
+}
+
+// MdmDeviceDetails returns the details for a device enrolled in Apple's
+// built-in device management service (GET /v1/mdmDevices/{id}/details).
+func (s *Service) MdmDeviceDetails(ctx context.Context, id string) (*MdmDeviceDetail, error) {
+	return applebusiness.Get[MdmDeviceDetailAttributes](ctx, s.c, "/v1/mdmDevices/"+url.PathEscape(id)+"/details")
+}

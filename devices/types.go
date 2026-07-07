@@ -72,12 +72,13 @@ type ActivityAttributes struct {
 	DownloadURL       string `json:"downloadUrl,omitempty"`
 }
 
-// --- Device Management Services (devices under an MDM) ---
+// --- Device Management Services (devices enrolled in Apple MDM) ---
 
-// MdmDevice is a managed device linked under /v1/mdmServers/{id}/devices.
+// MdmDevice is a device enrolled in Apple's built-in device management
+// service, listed via GET /v1/mdmDevices.
 type MdmDevice = applebusiness.ResourceObject[MdmDeviceAttributes]
 
-// MdmDeviceAttributes holds the attributes of an MdmDevice.
+// MdmDeviceAttributes holds the attributes of an MdmDevice (/v1/mdmDevices).
 type MdmDeviceAttributes struct {
 	DeviceName     string `json:"deviceName,omitempty"`
 	EnrolledUserID string `json:"enrolledUserId,omitempty"`
@@ -85,22 +86,30 @@ type MdmDeviceAttributes struct {
 	SerialNumber   string `json:"serialNumber,omitempty"`
 }
 
-// MdmDeviceDetail holds the detailed information of a managed device.
+// MdmDeviceDetail holds the detailed information of a device enrolled in
+// Apple's built-in device management service (GET /v1/mdmDevices/{id}/details).
 type MdmDeviceDetail = applebusiness.ResourceObject[MdmDeviceDetailAttributes]
 
 // MdmDeviceDetailAttributes holds the attributes of an MdmDeviceDetail.
 type MdmDeviceDetailAttributes struct {
-	DeviceName          string   `json:"deviceName,omitempty"`
-	DeviceModel         string   `json:"deviceModel,omitempty"`
-	IMEI                []string `json:"imei,omitempty"`
-	BluetoothMacAddress string   `json:"bluetoothMacAddress,omitempty"`
-	EthernetMacAddress  string   `json:"ethernetMacAddress,omitempty"`
-	DeviceEraseStatus   string   `json:"deviceEraseStatus,omitempty"` // NOT_ERASED | ERASED
-	DeviceLockStatus    string   `json:"deviceLockStatus,omitempty"`  // LOCKED | UNLOCKED
-	LostModeStatus      string   `json:"lostModeStatus,omitempty"`    // ENABLED | DISABLED
-	IsFileVaultEnabled  bool     `json:"isFileVaultEnabled,omitempty"`
-	IsFirewallEnabled   bool     `json:"isFirewallEnabled,omitempty"`
-	LastCheckInDateTime string   `json:"lastCheckInDateTime,omitempty"`
+	DeviceName           string   `json:"deviceName,omitempty"`
+	DeviceModel          string   `json:"deviceModel,omitempty"`
+	SerialNumber         string   `json:"serialNumber,omitempty"`
+	OSVersion            string   `json:"osVersion,omitempty"`
+	Platform             string   `json:"platform,omitempty"`
+	IMEI                 []string `json:"imei,omitempty"`
+	MEID                 []string `json:"meid,omitempty"`
+	WifiMacAddress       string   `json:"wifiMacAddress,omitempty"`
+	BluetoothMacAddress  string   `json:"bluetoothMacAddress,omitempty"`
+	EthernetMacAddress   string   `json:"ethernetMacAddress,omitempty"`
+	StorageFreeCapacity  int64    `json:"storageFreeCapacity,omitempty"`
+	StorageTotalCapacity int64    `json:"storageTotalCapacity,omitempty"`
+	DeviceEraseStatus    string   `json:"deviceEraseStatus,omitempty"` // NOT_ERASED | ERASED
+	DeviceLockStatus     string   `json:"deviceLockStatus,omitempty"`  // LOCKED | UNLOCKED
+	LostModeStatus       string   `json:"lostModeStatus,omitempty"`    // ENABLED | DISABLED
+	IsFileVaultEnabled   bool     `json:"isFileVaultEnabled,omitempty"`
+	IsFirewallEnabled    bool     `json:"isFirewallEnabled,omitempty"`
+	LastCheckInDateTime  string   `json:"lastCheckInDateTime,omitempty"`
 }
 
 // Device-state enumeration values (DeviceEraseStatus / DeviceLockStatus / LostModeStatus).

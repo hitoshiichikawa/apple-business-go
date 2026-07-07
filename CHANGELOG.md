@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Added
+- `devices.ListMdmDevices` / `devices.MdmDeviceDetails`: Apple の組み込みデバイス管理サービス（Apple MDM）に登録されたデバイスの一覧・詳細取得（API v2.0 で追加された `GET /v1/mdmDevices` / `GET /v1/mdmDevices/{id}/details`）（#21）。
+- `MdmDeviceDetailAttributes` に公式 DocC の全フィールドを反映（`serialNumber` / `osVersion` / `platform` / `meid` / `wifiMacAddress` / `storageFreeCapacity` / `storageTotalCapacity` を追加）（#21）。
+
 ## [0.4.1] - 2026-06-17
 
 ### Security
