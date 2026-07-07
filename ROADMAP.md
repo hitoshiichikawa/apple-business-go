@@ -31,7 +31,7 @@ flowchart LR
 | 区分 | 項目 | 状態 |
 |---|---|---|
 | `applebusiness` | OAuth2（ES256 JWT）/ リトライ / ページング / JSON:API / 汎用ヘルパ（List/Get/Relationship/Create/Update/Delete/ModifyRelationship） | ✅ |
-| `devices` | orgDevices / mdmServers / appleCareCoverage / 割り当て・解除アクティビティ / MdmDevice・MdmDeviceDetail 型 | ✅ |
+| `devices` | orgDevices / mdmServers / appleCareCoverage / 割り当て・解除アクティビティ / mdmDevices（一覧・詳細） | ✅ |
 | `people` | users / userGroups | ✅ |
 | `apps` | apps / packages（読み取り） | ✅ |
 | `blueprints` | CRUD + リレーション操作（add=POST / remove=DELETE / replace=PATCH） | ✅ |
@@ -60,7 +60,7 @@ flowchart LR
 | パッケージ | 内容 | 状態 |
 |---|---|---|
 | `applebusiness` | コア（認証/通信/ページング/リトライ/汎用ヘルパ） | 実装済み |
-| `devices` | orgDevices / mdmServers / appleCareCoverage / activities（割り当て・解除） | 実装済み |
+| `devices` | orgDevices / mdmServers / appleCareCoverage / activities（割り当て・解除） / mdmDevices（一覧・詳細） | 実装済み |
 | `people` | users / userGroups | 実装済み |
 | `apps` | apps / packages（読み取り） | 実装済み |
 | `blueprints` | CRUD + リレーション操作 | 実装済み |
@@ -102,7 +102,8 @@ Configurations はセキュリティ/ネットワーク等の設定単位、Blue
 
 ### 3.5 任意の拡張
 - [ ] 監査イベントの残り `eventData` 型（全33種のうち未型付け分。datatypes.md §4.3 準拠）
-- [ ] `MdmDevice` / `MdmDeviceDetail` のエンドポイント配線（`/v1/mdmServers/{id}/devices` 等、実レスポンス形は要確認）
+- [x] `MdmDevice` / `MdmDeviceDetail` のエンドポイント配線: `GET /v1/mdmDevices`（`ListMdmDevices`）/ `GET /v1/mdmDevices/{id}/details`（`MdmDeviceDetails`）。
+  公式 DocC で確定（API v2.0 で追加）。旧推測の `/v1/mdmServers/{id}/devices` というエンドポイントは存在しない
 - [ ] `brand`（旧 Apple Business Connect）パッケージ（将来）。実在するが **公開仕様（エンドポイント/データ型/DocC）が無い**。認証も device API と別系統（Service Account ＋ Partner Organization 委譲、Organization/Marketing Administrator ロール）。実装には Onboarding Guide の入手か、委譲設定済み組織での実機確定が前提（2026-06 調査。参考: support.apple.com/guide/business/brands-api-access-abcb4226f877/web）
 - [ ] `support` パッケージ（将来）
 
@@ -118,6 +119,7 @@ Configurations はセキュリティ/ネットワーク等の設定単位、Blue
 - [ ] 旧来「不可」とされた操作（デバイス release、移行期限、MDMトークン更新）の現在の可否
 
 > 解決済み: OAuth 方式（token端点=`/auth/oauth2/token`、アサーション `aud`=`/auth/oauth2/v2/token`、`iss`=team_id（=client_id）、ES256、scope、180日/60分。Web で確認済み）/
+> `MdmDevice` / `MdmDeviceDetail` の取得エンドポイントは `GET /v1/mdmDevices` / `GET /v1/mdmDevices/{id}/details`（API v2.0 で追加。公式 DocC で確定。`/v1/mdmServers/{id}/devices` という related エンドポイントは存在しない）/
 > auditEvents の必須クエリ `filter[startTimestamp]`（+ `filter[endTimestamp]`、ISO8601。実APIで確認）/
 > アクティビティ status `IN_PROGRESS`→`COMPLETED`（部分失敗でも COMPLETED）・subStatus `COMPLETED_WITH_ERROR`（実APIで確認。PollActivity は処理中以外を終了とみなす）/
 > フィールド名（userGroup の `type` 等）/ 列挙値 / 監査イベントモデル /

@@ -47,13 +47,17 @@
 `purchaseSourceId`(string), `serialNumber`(string), `status`(string), `updatedDateTime`(date-time),
 `releaserEntityType`(string), `releaserId`(string)
 
-### MdmDevice.Attributes（`/v1/mdmServers/{id}/devices`）
+### MdmDevice.Attributes（`/v1/mdmDevices`）
+> Apple の組み込みデバイス管理サービス（Apple MDM）に登録されたデバイス。`GET /v1/mdmDevices`（クエリ: `fields[mdmDevices]`, `limit`）で一覧取得。SDK は `ListMdmDevices`。
 `deviceName`(string), `enrolledUserId`(string), `productFamily`(string), `serialNumber`(string)
 
-### MdmDeviceDetail.Attributes
+### MdmDeviceDetail.Attributes（`/v1/mdmDevices/{id}/details`）
+> `GET /v1/mdmDevices/{id}/details`（クエリ: `fields[mdmDeviceDetails]`）で取得。SDK は `MdmDeviceDetails`。
 `bluetoothMacAddress`(string), `deviceEraseStatus`(DeviceEraseStatus), `deviceLockStatus`(DeviceLockStatus),
 `deviceModel`(string), `deviceName`(string), `ethernetMacAddress`(string), `imei`([string]),
-`isFileVaultEnabled`(boolean), `isFirewallEnabled`(boolean), `lastCheckInDateTime`(date-time), `lostModeStatus`(LostModeStatus)
+`isFileVaultEnabled`(boolean), `isFirewallEnabled`(boolean), `lastCheckInDateTime`(date-time),
+`lostModeStatus`(LostModeStatus), `meid`([string]), `osVersion`(string), `platform`(string),
+`serialNumber`(string), `storageFreeCapacity`(integer), `storageTotalCapacity`(integer), `wifiMacAddress`(string)
 
 ### MdmServer.Attributes（`/v1/mdmServers`＝Device Management Services）
 > `mdmServers` は**一覧取得のみ**（`GET_COLLECTION`）。単体取得（`GET /v1/mdmServers/{id}`）は 403（`FORBIDDEN_ERROR`, allowed: GET_COLLECTION）。属性は一覧の各要素に含まれる。

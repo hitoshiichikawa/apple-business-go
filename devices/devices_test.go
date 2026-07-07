@@ -40,6 +40,31 @@ func devicesHandler(t *testing.T) http.HandlerFunc {
 					{Type: "mdmServers", ID: "S1", Attributes: MdmServerAttributes{ServerName: "Server-1", ServerType: "MDM"}},
 				},
 			})
+		case p == "/v1/mdmDevices" && r.Method == http.MethodGet:
+			if r.URL.Query().Get("cursor") == "p2" {
+				testutil.WriteJSON(t, w, http.StatusOK, applebusiness.ListResponse[MdmDeviceAttributes]{
+					Data: []applebusiness.ResourceObject[MdmDeviceAttributes]{
+						{Type: "mdmDevices", ID: "M2", Attributes: MdmDeviceAttributes{SerialNumber: "M2", DeviceName: "iPad-2", ProductFamily: "iPad"}},
+					},
+				})
+				return
+			}
+			testutil.WriteJSON(t, w, http.StatusOK, applebusiness.ListResponse[MdmDeviceAttributes]{
+				Data: []applebusiness.ResourceObject[MdmDeviceAttributes]{
+					{Type: "mdmDevices", ID: "M1", Attributes: MdmDeviceAttributes{SerialNumber: "M1", DeviceName: "iPhone-1", ProductFamily: "iPhone", EnrolledUserID: "U1"}},
+				},
+				Links: applebusiness.Links{Next: "http://" + r.Host + "/v1/mdmDevices?cursor=p2"},
+			})
+		case strings.HasPrefix(p, "/v1/mdmDevices/") && strings.HasSuffix(p, "/details") && r.Method == http.MethodGet:
+			id := strings.TrimSuffix(strings.TrimPrefix(p, "/v1/mdmDevices/"), "/details")
+			testutil.WriteJSON(t, w, http.StatusOK, applebusiness.SingleResponse[MdmDeviceDetailAttributes]{
+				Data: applebusiness.ResourceObject[MdmDeviceDetailAttributes]{Type: "mdmDeviceDetails", ID: id, Attributes: MdmDeviceDetailAttributes{
+					DeviceName: "iPhone-1", DeviceModel: "iPhone 15 Pro", SerialNumber: "SER1",
+					OSVersion: "18.5", Platform: "iOS",
+					StorageTotalCapacity: 256, StorageFreeCapacity: 128,
+					DeviceEraseStatus: EraseStatusNotErased, DeviceLockStatus: LockStatusUnlocked, LostModeStatus: LostModeDisabled,
+				}},
+			})
 		default:
 			http.Error(w, "not found: "+p, http.StatusNotFound)
 		}
@@ -101,6 +126,38 @@ func TestMdmServerDevices(t *testing.T) {
 	}
 	if len(ids) != 2 || ids[0].Type != "orgDevices" || ids[1].ID != "D2" {
 		t.Fatalf("unexpected: %+v", ids)
+	}
+}
+
+func TestListMdmDevices(t *testing.T) {
+	c := testutil.NewClient(t, devicesHandler(t))
+	got, err := New(c).ListMdmDevices(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Two pages joined via links.next.
+	if len(got) != 2 || got[0].ID != "M1" || got[1].ID != "M2" {
+		t.Fatalf("unexpected: %+v", got)
+	}
+	if got[0].Type != "mdmDevices" || got[0].Attributes.EnrolledUserID != "U1" || got[1].Attributes.ProductFamily != "iPad" {
+		t.Fatalf("attributes: %+v", got)
+	}
+}
+
+func TestMdmDeviceDetails(t *testing.T) {
+	c := testutil.NewClient(t, devicesHandler(t))
+	got, err := New(c).MdmDeviceDetails(context.Background(), "M1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Type != "mdmDeviceDetails" || got.ID != "M1" {
+		t.Fatalf("unexpected: %+v", got)
+	}
+	a := got.Attributes
+	if a.SerialNumber != "SER1" || a.OSVersion != "18.5" || a.Platform != "iOS" ||
+		a.StorageTotalCapacity != 256 || a.StorageFreeCapacity != 128 ||
+		a.DeviceEraseStatus != EraseStatusNotErased || a.DeviceLockStatus != LockStatusUnlocked || a.LostModeStatus != LostModeDisabled {
+		t.Fatalf("attributes: %+v", a)
 	}
 }
 

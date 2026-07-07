@@ -53,7 +53,7 @@
 
 5. **任意の拡張**（必要に応じて。一次情報は `docs/apple-business-api-datatypes.md`）
    - 監査イベントの残り `eventData` 型（全33種のうち未型付けのもの）を追加。型は datatypes.md §4.3 準拠。
-   - `MdmDevice` / `MdmDeviceDetail` 型に対応するエンドポイント配線（`/v1/mdmServers/{id}/devices` 等、実レスポンス形は要確認）。
+   - ~~`MdmDevice` / `MdmDeviceDetail` 型に対応するエンドポイント配線~~ → 実装済み（`GET /v1/mdmDevices` / `GET /v1/mdmDevices/{id}/details`。公式 DocC で確定）。
    - 不足エンドポイントは既存の `Service` パターン・汎用ヘルパで追加。
 
 6. **品質・CI** — `golangci-lint` 導入、`go test -race`、`go vet ./...`、`go doc` 用 Example テスト。

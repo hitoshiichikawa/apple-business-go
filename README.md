@@ -24,7 +24,7 @@ authentication, reading devices / users / MDM servers and more, and **assigning 
 ```
 apple-business-go/
 ├── applebusiness/   Core (shared foundation): Client, Config, Credentials, OAuth2/JWT, transport, pagination, errors
-├── devices/         Device management: orgDevices, mdmServers, orgDeviceActivities, appleCareCoverage
+├── devices/         Device management: orgDevices, mdmServers, mdmDevices, orgDeviceActivities, appleCareCoverage
 ├── blueprints/      Blueprint management: CRUD + assignment (apps/configurations/devices/users/groups)
 ├── configurations/  Configuration management: CRUD (CUSTOM_SETTING profiles)
 ├── apps/            Apps / packages (read-only): apps, packages
@@ -164,6 +164,7 @@ c, err := applebusiness.NewClient(
 | `devices` | `List` / `Get` | `/v1/orgDevices`, `/v1/orgDevices/{id}` |
 | `devices` | `AssignedServer` / `AppleCareCoverage` | `/v1/orgDevices/{id}/assignedServer`, `.../appleCareCoverage` |
 | `devices` | `ListMdmServers` / `MdmServerDevices` | `/v1/mdmServers`, `/v1/mdmServers/{id}/relationships/devices` |
+| `devices` | `ListMdmDevices` / `MdmDeviceDetails` | `/v1/mdmDevices`, `/v1/mdmDevices/{id}/details` |
 | `devices` | `Assign` / `Unassign` / `GetActivity` / `PollActivity` | `/v1/orgDeviceActivities(/{id})` |
 | `people` | `ListUsers` / `GetUser` | `/v1/users`, `/v1/users/{id}` |
 | `people` | `ListUserGroups` / `GetUserGroup` / `GroupMembers` | `/v1/userGroups(/{id})(/relationships/users)` |

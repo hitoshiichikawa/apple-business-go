@@ -18,7 +18,7 @@ Claude Code 向けのプロジェクトコンテキスト。作業前にこの�
 applebusiness/   コア（共通基盤）: Client, Config, Credentials, OAuth2/JWT, transport, リトライ,
                  JSON:API エンベロープ, 汎用ヘルパ（List/Get/Relationship/Create/Update/Delete/ModifyRelationship）
 devices/         デバイス管理: orgDevices, mdmServers, appleCareCoverage, 割り当て/解除アクティビティ,
-                 MdmDevice / MdmDeviceDetail 型
+                 mdmDevices（Apple MDM 登録デバイスの一覧・詳細）
 blueprints/      Blueprint管理: CRUD + 割り当て（apps/configurations/packages/orgDevices/users/userGroups）
 configurations/  Configuration管理: CRUD（CUSTOM_SETTING、configurationProfile=Base64）
 apps/            アプリ/パッケージ（読み取り）: apps, packages
@@ -60,7 +60,6 @@ go test -race ./...
   - トークンPOST先 `/auth/oauth2/token` か `/auth/oauth2/v2/token`（`aud` は v2）
   - `iss` が team_id か client_id か（AxMでは同一が通例）
   - `auditevents.List` の絞り込みクエリ名、アクティビティ終了ステータス文字列
-  - `/v1/mdmServers/{id}/devices` の実レスポンス（OrgDevice か MdmDevice か）
 - **書き込みのリトライ**: 現状コアの `Do` は 5xx を指数バックオフで再試行する。POST（作成）の二重実行リスクがあるため、
   書き込み系のリトライ/冪等性は要レビュー（必要なら書き込みは再試行しない等の調整）。
 - **監査イベント**: `auditevents.Attributes` は共通項目（actorId/eventDateTime/type 等）を型付きで保持し、
