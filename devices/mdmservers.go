@@ -33,11 +33,7 @@ type CreateMdmServerInput struct {
 func (s *Service) CreateMdmServer(ctx context.Context, in CreateMdmServerInput) (*MdmServer, error) {
 	var body mdmServerWriteBody
 	body.Data.Type = mdmServerType
-	body.Data.Attributes = mdmServerCreateAttrs{
-		ServerName:          in.ServerName,
-		ServerCertificate:   in.ServerCertificate,
-		EnableMdmDisownFlag: in.EnableMdmDisownFlag,
-	}
+	body.Data.Attributes = mdmServerCreateAttrs(in)
 	return applebusiness.Create[MdmServerAttributes](ctx, s.c, "/v1/mdmServers", body)
 }
 
