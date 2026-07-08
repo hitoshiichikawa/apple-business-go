@@ -38,9 +38,10 @@ func (s *Service) AppleCareCoverage(ctx context.Context, deviceID string) (*Cove
 }
 
 // ListMdmServers returns all MDM servers (device management services).
-// Note: mdmServers only allows GET_COLLECTION. Fetching a single server
-// (GET /v1/mdmServers/{id}) returns 403, so it is not provided. Each server's
-// attributes are included in the list elements (MdmServer.Attributes).
+// Each server's attributes are included in the list elements
+// (MdmServer.Attributes). Since Apple Business API 2.1 a single server can
+// also be fetched with GetMdmServer, and CRUD is available via
+// CreateMdmServer / UpdateMdmServer / DeleteMdmServer (see mdmservers.go).
 func (s *Service) ListMdmServers(ctx context.Context, q url.Values) ([]MdmServer, error) {
 	return applebusiness.List[MdmServerAttributes](ctx, s.c, "/v1/mdmServers", q)
 }

@@ -31,7 +31,7 @@ flowchart LR
 | 区分 | 項目 | 状態 |
 |---|---|---|
 | `applebusiness` | OAuth2（ES256 JWT）/ リトライ / ページング / JSON:API / 汎用ヘルパ（List/Get/Relationship/Create/Update/Delete/ModifyRelationship） | ✅ |
-| `devices` | orgDevices / mdmServers / appleCareCoverage / 割り当て・解除アクティビティ / mdmDevices（一覧・詳細） | ✅ |
+| `devices` | orgDevices / mdmServers（CRUD、API 2.1） / appleCareCoverage / 割り当て・解除アクティビティ / mdmDevices（一覧・詳細） | ✅ |
 | `people` | users / userGroups | ✅ |
 | `apps` | apps / packages（読み取り） | ✅ |
 | `blueprints` | CRUD + リレーション操作（add=POST / remove=DELETE / replace=PATCH） | ✅ |
@@ -60,7 +60,7 @@ flowchart LR
 | パッケージ | 内容 | 状態 |
 |---|---|---|
 | `applebusiness` | コア（認証/通信/ページング/リトライ/汎用ヘルパ） | 実装済み |
-| `devices` | orgDevices / mdmServers / appleCareCoverage / activities（割り当て・解除） / mdmDevices（一覧・詳細） | 実装済み |
+| `devices` | orgDevices / mdmServers（CRUD、API 2.1） / appleCareCoverage / activities（割り当て・解除） / mdmDevices（一覧・詳細） | 実装済み |
 | `people` | users / userGroups | 実装済み |
 | `apps` | apps / packages（読み取り） | 実装済み |
 | `blueprints` | CRUD + リレーション操作 | 実装済み |
@@ -115,7 +115,8 @@ Configurations はセキュリティ/ネットワーク等の設定単位、Blue
 
 ## 4. 未確定 / 本番前に Apple 公式で要確認
 
-- [x] `mdmServers` の割り当てデバイス: `relationships/devices`（linkage＝`{type:orgDevices,id}`）のみ可。related `…/devices` は `GET_RELATED` 不可（GET_RELATIONSHIP のみ）。フル属性は `orgDevices/{id}` を個別取得。単体 `GET /v1/mdmServers/{id}` も不可（GET_COLLECTION のみ）。実APIで確認。
+- [x] `mdmServers` の割り当てデバイス: `relationships/devices`（linkage＝`{type:orgDevices,id}`）のみ可。related `…/devices` は `GET_RELATED` 不可（GET_RELATIONSHIP のみ）。フル属性は `orgDevices/{id}` を個別取得。実APIで確認。
+  ※ 単体 `GET /v1/mdmServers/{id}` は 2.0 まで不可（GET_COLLECTION のみ）だったが、**API 2.1（2026-06-03）で単体 GET ＋ POST/PATCH/DELETE のフル CRUD が可能に**（公式 DocC changelog で確定。実機は未検証）。
 - [ ] 旧来「不可」とされた操作（デバイス release、移行期限、MDMトークン更新）の現在の可否
 
 > 解決済み: OAuth 方式（token端点=`/auth/oauth2/token`、アサーション `aud`=`/auth/oauth2/v2/token`、`iss`=team_id（=client_id）、ES256、scope、180日/60分。Web で確認済み）/

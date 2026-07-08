@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-09
+
+### Added
+- **`mdmServers` のフル CRUD 対応（Apple Business API 2.1、2026-06-03 追加）**（#23）:
+  - `devices.GetMdmServer`: 単体取得（`GET /v1/mdmServers/{id}`。2.0 までは 403 / GET_COLLECTION のみだった）。
+  - `devices.CreateMdmServer`: 作成（`POST /v1/mdmServers`）。`serverName` と `serverCertificate`（Base64 X.509）が必須、`enableMdmDisownFlag` は任意。
+  - `devices.UpdateMdmServer`: 部分更新（`PATCH /v1/mdmServers/{id}`）。`serverName` / `serverCertificate` / `enableMdmDisownFlag` / `defaultProductFamilies` を個別に変更可（未指定は不変）。
+  - `devices.DeleteMdmServer`: 削除（`DELETE /v1/mdmServers/{id}`、204）。割り当てデバイスが残っている場合は削除不可（先に全デバイスの割り当て解除が必要）。
+- `devices.MdmServerAttributes` に API 2.1 の新フィールドを追加: `Status` / `DeviceCount` / `EnableMdmDisownFlag` / `DefaultProductFamilies` / `LastConnectedDateTime` / `LastConnectedIP`（#23）。
+- `devices.MdmServerCertificate` 型と列挙値定数 `MdmServerStatus*`（ACTIVE / INACTIVE / DELETED）・`MdmProductFamily*`（APPLE_TV / IPAD / IPHONE / IPOD / MAC / VISION / WATCH）を追加（#23）。
+
 ## [0.5.0] - 2026-07-07
 
 ### Added
