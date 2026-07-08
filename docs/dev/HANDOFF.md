@@ -62,7 +62,8 @@ JSON:API 形式。OAuth2 client_credentials + ES256 JWT クライアントアサ
 - **auditEvents**: `GET /v1/auditEvents` は **`filter[startTimestamp]` が必須**（無いと 400 `PARAMETER_ERROR.REQUIRED`）。
   通常 `filter[endTimestamp]` と併用、ISO8601(RFC3339 UTC)。SDK は `auditevents.ListRange(start, end, q)`。
   応答は共通エンベロープ + `eventData<Event>`（キー名＝`eventDataPropertyKey`、例 `eventDataApiAccountCreatedWithKey:{keyId}`）。
-- **mdmServers**: `GET_COLLECTION` のみ。単体 `GET /v1/mdmServers/{id}` は **403**（allowed: GET_COLLECTION）。属性は一覧の各要素に入る。
+- **mdmServers**: 属性は一覧の各要素に入る。2.0 までは `GET_COLLECTION` のみ（単体 `GET /v1/mdmServers/{id}` は 403）だったが、
+  **API 2.1（2026-06-03）で単体 GET + POST/PATCH/DELETE のフル CRUD に対応**（SDK: `GetMdmServer`/`CreateMdmServer`/`UpdateMdmServer`/`DeleteMdmServer`）。
 - **mdmServers の割り当てデバイス**: `GET /v1/mdmServers/{id}/relationships/devices`（linkage＝`{type:orgDevices,id}` のID一覧）**のみ可**。
   related の `GET /v1/mdmServers/{id}/devices` は **403**（`GET_RELATED` 不可, allowed: GET_RELATIONSHIP）。
   フル属性は各 `orgDevices/{id}` を個別取得（SDK `devices.MdmServerDeviceList` がそれを実施＝N+1）。

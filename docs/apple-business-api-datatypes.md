@@ -60,9 +60,14 @@
 `serialNumber`(string), `storageFreeCapacity`(integer), `storageTotalCapacity`(integer), `wifiMacAddress`(string)
 
 ### MdmServer.Attributes（`/v1/mdmServers`＝Device Management Services）
-> `mdmServers` は**一覧取得のみ**（`GET_COLLECTION`）。単体取得（`GET /v1/mdmServers/{id}`）は 403（`FORBIDDEN_ERROR`, allowed: GET_COLLECTION）。属性は一覧の各要素に含まれる。
+> **API 2.1（2026-06-03）でフル CRUD 化**: `GET /v1/mdmServers/{id}`（単体取得。2.0 までは 403 だった）/ `POST /v1/mdmServers`（作成、201）/ `PATCH /v1/mdmServers/{id}`（部分更新、200）/ `DELETE /v1/mdmServers/{id}`（204。**割り当てデバイスが残っていると削除不可**）。SDK は `GetMdmServer` / `CreateMdmServer` / `UpdateMdmServer` / `DeleteMdmServer`。
+> 作成は `serverName`(string!) + `serverCertificate`(MdmServerCertificate!) が必須、`enableMdmDisownFlag`(boolean) は任意。更新はすべて任意で、加えて `defaultProductFamilies`([MdmServerProductFamily]) を変更可。
+> `MdmServerCertificate`: `name`(string!)＝ファイル名, `data`(string!)＝Base64 の X.509 証明書。
 > 割り当てデバイス: `GET /v1/mdmServers/{id}/relationships/devices` のみ可（linkage＝`{type:orgDevices,id}` のID一覧）。related の `GET /v1/mdmServers/{id}/devices` は **`GET_RELATED` 不可（403, allowed: GET_RELATIONSHIP）**。フル属性は各 `orgDevices/{id}` を個別取得。SDK は `MdmServerDevices`（ID）/ `MdmServerDeviceList`（ID→個別Getでフル）。
-`createdDateTime`(date-time), `serverName`(string), `serverType`(string), `updatedDateTime`(date-time)
+`createdDateTime`(date-time), `defaultProductFamilies`([MdmServerProductFamily]), `deviceCount`(integer, RO),
+`enableMdmDisownFlag`(boolean), `lastConnectedDateTime`(date-time, RO), `lastConnectedIp`(string, RO),
+`serverName`(string), `serverType`(string, RO), `status`(MdmServerStatus, RO), `updatedDateTime`(date-time)
+> 列挙値 — `MdmServerStatus`: `ACTIVE` | `INACTIVE` | `DELETED` / `MdmServerProductFamily`: `APPLE_TV` | `IPAD` | `IPHONE` | `IPOD` | `MAC` | `VISION` | `WATCH`
 
 ### OrgDeviceActivity.Attributes（`/v1/orgDeviceActivities`）
 `createdDateTime`(date-time), `status`(string), `subStatus`(string), `completedDateTime`(date-time), `downloadUrl`(string)

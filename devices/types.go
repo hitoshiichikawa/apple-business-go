@@ -44,11 +44,43 @@ type DeviceAttributes struct {
 
 // MdmServerAttributes : /v1/mdmServers and /v1/orgDevices/{id}/assignedServer
 type MdmServerAttributes struct {
-	ServerName      string `json:"serverName"`
-	ServerType      string `json:"serverType"` // MDM | APPLE_CONFIGURATOR | APPLE_MDM
-	CreatedDateTime string `json:"createdDateTime"`
-	UpdatedDateTime string `json:"updatedDateTime"`
+	ServerName             string   `json:"serverName"`
+	ServerType             string   `json:"serverType"`                       // MDM | APPLE_CONFIGURATOR | APPLE_MDM
+	Status                 string   `json:"status,omitempty"`                 // MdmServerStatus: ACTIVE | INACTIVE | DELETED
+	DeviceCount            int64    `json:"deviceCount,omitempty"`            // read only
+	EnableMdmDisownFlag    bool     `json:"enableMdmDisownFlag,omitempty"`    // service may disown its enrolled devices
+	DefaultProductFamilies []string `json:"defaultProductFamilies,omitempty"` // MdmServerProductFamily values
+	LastConnectedDateTime  string   `json:"lastConnectedDateTime,omitempty"`  // read only
+	LastConnectedIP        string   `json:"lastConnectedIp,omitempty"`        // read only
+	CreatedDateTime        string   `json:"createdDateTime"`
+	UpdatedDateTime        string   `json:"updatedDateTime"`
 }
+
+// MdmServerCertificate is the X.509 certificate to associate with a device
+// management service (Create/Update MdmServer). Data is the Base64-encoded
+// certificate.
+type MdmServerCertificate struct {
+	Name string `json:"name"`
+	Data string `json:"data"`
+}
+
+// Values of MdmServerStatus.
+const (
+	MdmServerStatusActive   = "ACTIVE"
+	MdmServerStatusInactive = "INACTIVE"
+	MdmServerStatusDeleted  = "DELETED"
+)
+
+// Values of MdmServerProductFamily (MdmServerAttributes.DefaultProductFamilies).
+const (
+	MdmProductFamilyAppleTV = "APPLE_TV"
+	MdmProductFamilyIPad    = "IPAD"
+	MdmProductFamilyIPhone  = "IPHONE"
+	MdmProductFamilyIPod    = "IPOD"
+	MdmProductFamilyMac     = "MAC"
+	MdmProductFamilyVision  = "VISION"
+	MdmProductFamilyWatch   = "WATCH"
+)
 
 // AppleCareCoverageAttributes : /v1/orgDevices/{id}/appleCareCoverage
 type AppleCareCoverageAttributes struct {

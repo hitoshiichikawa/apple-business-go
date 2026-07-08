@@ -113,6 +113,10 @@ scope=<business.api | school.api>
 | メソッド | パス | 用途 |
 |---|---|---|
 | GET | `/v1/mdmServers` | MDMサーバ一覧 |
+| GET | `/v1/mdmServers/{id}` | MDMサーバ単体取得（**API 2.1+**。2.0 までは 403） |
+| POST | `/v1/mdmServers` | MDMサーバ作成（**API 2.1+**、201。`serverName`+`serverCertificate` 必須）。**書き込み系** |
+| PATCH | `/v1/mdmServers/{id}` | MDMサーバ部分更新（**API 2.1+**、200）。**書き込み系** |
+| DELETE | `/v1/mdmServers/{id}` | MDMサーバ削除（**API 2.1+**、204。割り当てデバイスが残ると不可）。**書き込み系** |
 | GET | `/v1/mdmServers/{id}/relationships/devices` | サーバ配下のデバイス（シリアル/ID） |
 
 ### 3.4 アクティビティ（割り当て/解除）
@@ -196,9 +200,16 @@ scope=<business.api | school.api>
 |---|---|---|
 | `id` | String | リソースID |
 | `server_name` | String | サービス名 |
-| `server_type` | String | **MDM / APPLE_CONFIGURATOR / APPLE_MDM** |
+| `server_type` | String | **MDM / APPLE_CONFIGURATOR / APPLE_MDM**（読み取り専用） |
+| `status` | String | **ACTIVE / INACTIVE / DELETED**（API 2.1+、読み取り専用） |
+| `device_count` | Integer | 割り当てデバイス数（API 2.1+、読み取り専用） |
+| `enable_mdm_disown_flag` | Boolean | デバイスの disown 許可（API 2.1+） |
+| `default_product_families` | [String] | 既定割り当ての製品ファミリ **APPLE_TV / IPAD / IPHONE / IPOD / MAC / VISION / WATCH**（API 2.1+、更新可） |
+| `last_connected_date_time` / `last_connected_ip` | String | 最終接続日時 / 接続元IP（API 2.1+、読み取り専用） |
 | `created_date_time` / `updated_date_time` | String | 各日時 |
 | `type` | String | `mdmServers` |
+
+作成/更新の証明書は `serverCertificate: { name(String!), data(String!=Base64 X.509) }`。
 
 ### 4.5 Assigned Server Info（`/v1/orgDevices/{id}/assignedServer`）
 `device_id`, `server_id`, `server_name`, `server_type`(MDM/APPLE_CONFIGURATOR/APPLE_MDM),

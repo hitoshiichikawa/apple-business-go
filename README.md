@@ -163,7 +163,7 @@ c, err := applebusiness.NewClient(
 |---|---|---|
 | `devices` | `List` / `Get` | `/v1/orgDevices`, `/v1/orgDevices/{id}` |
 | `devices` | `AssignedServer` / `AppleCareCoverage` | `/v1/orgDevices/{id}/assignedServer`, `.../appleCareCoverage` |
-| `devices` | `ListMdmServers` / `MdmServerDevices` | `/v1/mdmServers`, `/v1/mdmServers/{id}/relationships/devices` |
+| `devices` | `ListMdmServers` / `GetMdmServer` / `CreateMdmServer` / `UpdateMdmServer` / `DeleteMdmServer` / `MdmServerDevices` | `/v1/mdmServers(/{id})`, `/v1/mdmServers/{id}/relationships/devices` (CRUD: API 2.1+) |
 | `devices` | `ListMdmDevices` / `MdmDeviceDetails` | `/v1/mdmDevices`, `/v1/mdmDevices/{id}/details` |
 | `devices` | `Assign` / `Unassign` / `GetActivity` / `PollActivity` | `/v1/orgDeviceActivities(/{id})` |
 | `people` | `ListUsers` / `GetUser` | `/v1/users`, `/v1/users/{id}` |
