@@ -4,6 +4,8 @@
 //   - 既定はドライラン（無変更）。実行は -yes が必須。
 //   - Blueprint / Configuration は専用のテスト用リソースを「作成→更新→（任意でリレーション付替）→削除」する自己完結方式。
 //     既定では最後に削除して後始末する（-keep で残す）。
+//   - MDM サーバ（API 2.1 の CRUD）も同じ自己完結方式。自己署名 X.509 証明書をその場で生成して
+//     「作成→取得→更新→削除」する。デバイスは一切割り当てないため削除で完全に消える。
 //   - デバイス割り当て（Assign/Unassign）は実デバイスの状態を変えるため明示オプトイン。
 //     -assign-server と -assign-device の両方を指定したときだけ実行し、元の割り当て先へベストエフォートで復元する。
 //
@@ -22,9 +24,15 @@ package main
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/base64"
 	"flag"
 	"fmt"
+	"math/big"
 	"net/url"
 	"os"
 	"time"
@@ -159,10 +167,39 @@ func main() {
 		}
 	}
 
+	// --- MdmServers: Create -> Get -> Update -> Delete（API 2.1、自己完結）---
+	// 証明書は自己署名（その場で生成、鍵は破棄）。デバイスは割り当てないため
+	// deviceCount=0 のまま削除できる。証明書 data の形式は DocC どおり Base64 の DER。
+	fmt.Println("\n== MdmServers (API 2.1) ==")
+	devSvc := devices.New(c)
+	srv, serr := devSvc.CreateMdmServer(ctx, devices.CreateMdmServerInput{
+		ServerName:        name,
+		ServerCertificate: devices.MdmServerCertificate{Name: name + ".cer", Data: selfSignedCertBase64(name)},
+	})
+	report("devices.CreateMdmServer", serr)
+	if serr == nil {
+		got, gerr := devSvc.GetMdmServer(ctx, srv.ID)
+		report("devices.GetMdmServer", gerr)
+		if gerr == nil {
+			fmt.Printf("  id=%s status=%s deviceCount=%d\n", got.ID, got.Attributes.Status, got.Attributes.DeviceCount)
+		}
+
+		_, uerr := devSvc.UpdateMdmServer(ctx, srv.ID, devices.UpdateMdmServerInput{
+			ServerName:             strptr(name + "-updated"),
+			DefaultProductFamilies: []string{devices.MdmProductFamilyIPhone, devices.MdmProductFamilyIPad},
+		})
+		report("devices.UpdateMdmServer", uerr)
+
+		if *keep {
+			fmt.Printf("  （-keep のため MDM サーバ %s は残します）\n", srv.ID)
+		} else {
+			report("devices.DeleteMdmServer", devSvc.DeleteMdmServer(ctx, srv.ID))
+		}
+	}
+
 	// --- Devices: Assign/Unassign（オプトイン・復元あり） ---
 	if *assignServer != "" && *assignDevice != "" {
 		fmt.Println("\n== Devices (assign/unassign) ==")
-		devSvc := devices.New(c)
 
 		orig := ""
 		if srv, e := devSvc.AssignedServer(ctx, *assignDevice); e == nil && srv != nil {
@@ -232,6 +269,7 @@ func printPlan(appID, assignServer, assignDevice string, keep bool) {
 	fmt.Println("-yes を付けると以下を実行します:")
 	fmt.Println("  Configurations: Create(CUSTOM_SETTING) → Update" + delNote(keep))
 	fmt.Println("  Blueprints:     中身=上記Configuration＋割り当て先(userGroups/users)1件を一時付与（一瞬配信） → Create → Update" + relNote(appID) + delNote(keep))
+	fmt.Println("  MdmServers:     Create(自己署名証明書・デバイス割り当てなし) → Get → Update(名前+defaultProductFamilies)" + delNote(keep))
 	if assignServer != "" && assignDevice != "" {
 		fmt.Printf("  Devices:        Assign(%s→%s) → 復元(元へ戻す/解除)\n", assignDevice, assignServer)
 	} else {
@@ -281,6 +319,33 @@ func sampleMobileconfig(name string) string {
   </array>
 </dict>
 </plist>`
+}
+
+// selfSignedCertBase64 は MDM サーバ登録用の自己署名 X.509 証明書を生成し、
+// Base64（DER）で返す。鍵はこの場で捨てる（本物の MDM とペアリングする用途ではなく、
+// CRUD の疎通確認のみが目的）。
+func selfSignedCertBase64(cn string) string {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		fatalf("generate cert key: %v", err)
+	}
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		fatalf("generate cert serial: %v", err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber:          serial,
+		Subject:               pkix.Name{CommonName: cn},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		BasicConstraintsValid: true,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		fatalf("create certificate: %v", err)
+	}
+	return base64.StdEncoding.EncodeToString(der)
 }
 
 func uuid() string {

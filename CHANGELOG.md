@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Added
+- `examples/write-test`: mdmServers CRUD（API 2.1）の実機スモークテストを追加。自己署名 X.509 証明書をその場で生成して Create→Get→Update→Delete する自己完結方式（デバイス割り当てなし）。既定ドライラン・`-keep` 対応は従来どおり（#25）。
+
 ## [0.6.0] - 2026-07-09
 
 ### Added
