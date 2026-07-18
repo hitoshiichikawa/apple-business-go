@@ -4,7 +4,15 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-18
+
 ### Added
+- **`orgunits` パッケージを新設（Apple Business API 2.2、2026-07-15 追加の organizationalUnits）**（#27）。組織単位（OU）は users/userGroups が参照する組織階層エンティティ（`User.roleOuList` の `ouId` / `UserGroup.ouId`）で、people とは管理軸が異なるため専用パッケージとした。読み取り専用:
+  - `orgunits.List`: 一覧（`GET /v1/organizationalUnits`、`limit`≤1000、カーソルページング）。
+  - `orgunits.Get`: 単体取得（`GET /v1/organizationalUnits/{id}`）。
+  - `orgunits.Members`: 所属ユーザーの ID 一覧（`GET /v1/organizationalUnits/{id}/relationships/users`、linkage＝`{type:users,id}`）。
+  - 型 `OrganizationalUnit` / `OrganizationalUnitAttributes`（`name` / `description` / `createdDateTime` / `updatedDateTime`）。
+- `examples/dump-all`: Organizational Units セクションを追加（読み取り専用の疎通確認）（#27）。
 - `examples/write-test`: mdmServers CRUD（API 2.1）の実機スモークテストを追加。自己署名 X.509 証明書をその場で生成して Create→Get→Update→Delete する自己完結方式（デバイス割り当てなし）。既定ドライラン・`-keep` 対応は従来どおり（#25）。
 
 ## [0.6.0] - 2026-07-09

@@ -24,6 +24,7 @@ configurations/  Configuration管理: CRUD（CUSTOM_SETTING、configurationProfi
 apps/            アプリ/パッケージ（読み取り）: apps, packages
 auditevents/     監査イベント（読み取り）: auditEvents（共通エンベロープ + eventData + Payload）
 people/          ピープル管理: users, userGroups
+orgunits/        組織単位（読み取り、API 2.2）: organizationalUnits（List/Get/Members）
 examples/        実行サンプル
 docs/            apple-business-api-datatypes.md（型の一次情報）/ apple-business-api-reference.md（§7 書き込み・§8 公式確認）
 ```

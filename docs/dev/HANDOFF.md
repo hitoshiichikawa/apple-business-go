@@ -30,6 +30,7 @@ JSON:API 形式。OAuth2 client_credentials + ES256 JWT クライアントアサ
   型付きエラー判定 `IsNotFound`/`IsRateLimited`/`IsUnauthorized`/`IsForbidden`/`IsConflict`、
   `Client.AccessToken()`(認証単体確認)、エンベロープ型(`types.go`)、`APIError`、リトライ(429/5xx指数バックオフ)。
 - ドメイン: `devices/`（orgDevices・mdmServers・appleCareCoverage・割り当てactivities）、`people/`（users・userGroups）、
+  `orgunits/`（organizationalUnits＝読み取り、API 2.2）、
   `apps/`（apps・packages＝読み取り）、`blueprints/`（CRUD＋リレーション）、`configurations/`（CRUD・CUSTOM_SETTING）、
   `auditevents/`（読み取り。共通エンベロープ＋eventData型付け）。
 - `examples/`: `list-devices`、`smoke-test`（疎通確認）、`dump-all`（全リード系の応答ダンプ）、
