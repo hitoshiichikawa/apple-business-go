@@ -261,7 +261,17 @@ func (d *dumper) run() {
 		}
 	}
 
-	// 8. Audit Events（filter[startTimestamp] が必須）
+	// 8. Organizational Units（API 2.2、読み取り専用）
+	if d.want("Organizational Units") {
+		d.banner("Organizational Units")
+		body := d.list("/v1/organizationalUnits")
+		if id := firstID(body); id != "" {
+			d.get("/v1/organizationalUnits/" + esc(id))
+			d.list("/v1/organizationalUnits/" + esc(id) + "/relationships/users")
+		}
+	}
+
+	// 9. Audit Events（filter[startTimestamp] が必須）
 	if d.want("Audit Events") {
 		d.banner("Audit Events")
 		end := time.Now().UTC()

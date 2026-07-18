@@ -89,6 +89,11 @@
 `ouId`(string), `name`(string), `type`(UserGroupType), `totalMemberCount`(integer), `status`(UserGroupStatus),
 `createdDateTime`(date-time), `updatedDateTime`(date-time)
 
+### OrganizationalUnit.Attributes（`/v1/organizationalUnits`＝組織単位、API 2.2）
+> **API 2.2（2026-07-15）で追加**（読み取り専用）。OU は users/userGroups が参照する組織階層エンティティ（`User.roleOuList` の `ouId` / `UserGroup.ouId`）。
+> `GET /v1/organizationalUnits`（一覧、`limit`≤1000、カーソルページング）/ `GET /v1/organizationalUnits/{id}`（単体）/ `GET /v1/organizationalUnits/{id}/relationships/users`（所属ユーザーの ID linkage＝`{type:users,id}`、ページング）。related の `…/users` は無く relationships のみ。SDK は `orgunits.List` / `Get` / `Members`。
+`name`(string), `description`(string), `createdDateTime`(date-time), `updatedDateTime`(date-time)
+
 ### App.Attributes（`/v1/apps`）
 `name`(string), `bundleId`(string), `version`(string), `supportedOS`([SupportedOS] = 配列), `isCustomApp`(boolean),
 `appStoreUrl`(string), `websiteUrl`(string)

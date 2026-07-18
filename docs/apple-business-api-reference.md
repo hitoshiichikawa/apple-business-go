@@ -99,6 +99,9 @@ scope=<business.api | school.api>
 | GET | `/v1/userGroups` | ユーザーグループ一覧 |
 | GET | `/v1/userGroups/{id}` | ユーザーグループ詳細 |
 | GET | `/v1/userGroups/{id}/relationships/users` | グループ所属ユーザーID |
+| GET | `/v1/organizationalUnits` | 組織単位一覧（**API 2.2+**） |
+| GET | `/v1/organizationalUnits/{id}` | 組織単位詳細（**API 2.2+**） |
+| GET | `/v1/organizationalUnits/{id}/relationships/users` | 組織単位所属ユーザーID（**API 2.2+**） |
 
 ### 3.2 デバイス
 | メソッド | パス | 用途 |
@@ -175,6 +178,17 @@ scope=<business.api | school.api>
 | `created_date_time` / `updated_date_time` | String | 各日時 |
 | `type` | String | リソース種別 |
 
+### 4.2.1 Organizational Unit（`/v1/organizationalUnits`、API 2.2）
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `id` | String | 組織単位ID |
+| `name` | String | 組織単位名 |
+| `description` | String | 説明 |
+| `created_date_time` / `updated_date_time` | String | 各日時 |
+| `type` | String | `organizationalUnits` |
+
+所属ユーザーは `GET /v1/organizationalUnits/{id}/relationships/users`（linkage＝`{type:users,id}`）で取得。
+
 ### 4.3 Org Device（`/v1/orgDevices`）
 | フィールド | 型 | 説明 |
 |---|---|---|
@@ -228,6 +242,7 @@ scope=<business.api | school.api>
 |---|---|---|
 | Users | `GET /v1/users` | `GET /v1/users/{id}`（＋所属グループ） |
 | User Groups | `GET /v1/userGroups` | `GET /v1/userGroups/{id}` ＋ `/relationships/users` |
+| Organizational Units | `GET /v1/organizationalUnits` | `GET /v1/organizationalUnits/{id}` ＋ `/relationships/users` |
 | Devices | `GET /v1/orgDevices` | `GET /v1/orgDevices/{id}` ＋ `/assignedServer` ＋ `/appleCareCoverage` |
 | MDM Servers | `GET /v1/mdmServers` | `/v1/mdmServers/{id}/relationships/devices`（配下端末） |
 | Activities | `GET /v1/orgDeviceActivities/{id}` | 同左（ステータス） |

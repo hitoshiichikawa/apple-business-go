@@ -30,6 +30,7 @@ apple-business-go/
 ├── apps/            Apps / packages (read-only): apps, packages
 ├── auditevents/     Audit events (read-only): auditEvents
 ├── people/          People management: users, userGroups
+├── orgunits/        Organizational units (read-only, API 2.2): organizationalUnits
 ├── brand/           Brand management (future / Apple Business Connect)
 └── support/         Support (future)
 ```
@@ -168,6 +169,7 @@ c, err := applebusiness.NewClient(
 | `devices` | `Assign` / `Unassign` / `GetActivity` / `PollActivity` | `/v1/orgDeviceActivities(/{id})` |
 | `people` | `ListUsers` / `GetUser` | `/v1/users`, `/v1/users/{id}` |
 | `people` | `ListUserGroups` / `GetUserGroup` / `GroupMembers` | `/v1/userGroups(/{id})(/relationships/users)` |
+| `orgunits` | `List` / `Get` / `Members` | `/v1/organizationalUnits(/{id})(/relationships/users)` (API 2.2+) |
 | `blueprints` | `List` / `Get` / `Create` / `Update` / `Delete` / `AddTo` / `RemoveFrom` / `Replace` / `RelationshipIDs` | `/v1/blueprints(/{id})(/relationships/{rel})` |
 | `configurations` | `List` / `Get` / `Create` / `Update` / `Delete` | `/v1/configurations(/{id})` |
 | `apps` | `ListApps` / `GetApp` / `ListPackages` / `GetPackage` | `/v1/apps(/{id})`, `/v1/packages(/{id})` |

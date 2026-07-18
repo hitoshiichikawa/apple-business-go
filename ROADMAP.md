@@ -33,6 +33,7 @@ flowchart LR
 | `applebusiness` | OAuth2（ES256 JWT）/ リトライ / ページング / JSON:API / 汎用ヘルパ（List/Get/Relationship/Create/Update/Delete/ModifyRelationship） | ✅ |
 | `devices` | orgDevices / mdmServers（CRUD、API 2.1） / appleCareCoverage / 割り当て・解除アクティビティ / mdmDevices（一覧・詳細） | ✅ |
 | `people` | users / userGroups | ✅ |
+| `orgunits` | organizationalUnits（一覧・単体・所属ユーザー、読み取り、API 2.2） | ✅ |
 | `apps` | apps / packages（読み取り） | ✅ |
 | `blueprints` | CRUD + リレーション操作（add=POST / remove=DELETE / replace=PATCH） | ✅ |
 | `configurations` | CRUD（CUSTOM_SETTING、`configurationProfile`=Base64） | ✅ |
@@ -62,6 +63,7 @@ flowchart LR
 | `applebusiness` | コア（認証/通信/ページング/リトライ/汎用ヘルパ） | 実装済み |
 | `devices` | orgDevices / mdmServers（CRUD、API 2.1） / appleCareCoverage / activities（割り当て・解除） / mdmDevices（一覧・詳細） | 実装済み |
 | `people` | users / userGroups | 実装済み |
+| `orgunits` | organizationalUnits（読み取り、API 2.2） | 実装済み |
 | `apps` | apps / packages（読み取り） | 実装済み |
 | `blueprints` | CRUD + リレーション操作 | 実装済み |
 | `configurations` | CRUD（CUSTOM_SETTING） | 実装済み |
