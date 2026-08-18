@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-18
+
 ### Added
 - **デバイス管理サービス移行（MDM migration）対応（Apple Business API 2.3 / Apple School Manager API 1.6、2026-08-12 追加）**。デバイスを消去せずに別のデバイス管理サービスへ移行できる:
   - `devices.AssignWithMdmMigrationDeadline`: デバイスを MDM サーバへ割り当てつつ移行期限付きで移行をスケジュール（`activityType=ASSIGN_DEVICES_WITH_MDM_MIGRATION_DEADLINE`）。期限は最大 90 日先（範囲外は 409）。
