@@ -122,11 +122,23 @@ scope=<business.api | school.api>
 | DELETE | `/v1/mdmServers/{id}` | MDMサーバ削除（**API 2.1+**、204。割り当てデバイスが残ると不可）。**書き込み系** |
 | GET | `/v1/mdmServers/{id}/relationships/devices` | サーバ配下のデバイス（シリアル/ID） |
 
-### 3.4 アクティビティ（割り当て/解除）
+### 3.4 アクティビティ（割り当て/解除/MDM移行）
 | メソッド | パス | 用途 |
 |---|---|---|
-| POST | `/v1/orgDeviceActivities` | 割り当て/解除アクティビティ作成（バッチ）。**書き込み系** |
+| POST | `/v1/orgDeviceActivities` | 割り当て/解除/MDM移行アクティビティ作成（バッチ）。**書き込み系** |
 | GET | `/v1/orgDeviceActivities/{id}` | アクティビティの実行ステータス確認 |
+
+`activityType`（**API 2.3+** で移行系 3 種追加、2026-08-12）:
+
+| activityType | 用途 | `mdmServer` rel | `activityTypeMetadata` |
+|---|---|---|---|
+| `ASSIGN_DEVICES` | MDM サーバへ割り当て | 必須 | 不要 |
+| `UNASSIGN_DEVICES` | 割り当て解除 | 必須 | 不要 |
+| `ASSIGN_DEVICES_WITH_MDM_MIGRATION_DEADLINE` | 割り当て + 期限付き移行スケジュール（**API 2.3+**） | 必須 | `mdmMigrationDeadlineDateTime` 必須（最大 90 日先。範囲外は 409） |
+| `UPDATE_MDM_MIGRATION_DEADLINE` | 進行中の移行の期限変更（**API 2.3+**） | 不要 | `mdmMigrationDeadlineDateTime` 必須 |
+| `CANCEL_MDM_MIGRATION` | 進行中の移行キャンセル（**API 2.3+**） | 不要 | 不要 |
+
+移行の進捗はデバイス側属性（`isMdmMigrationCapable` / `mdmMigrationStatus` / `mdmMigrationDeadlineDateTime`、**API 2.3+**）で確認。
 
 ### 3.5 アプリ / パッケージ / ブループリント / 構成 / 監査
 | メソッド | パス | 用途 |
@@ -254,8 +266,9 @@ scope=<business.api | school.api>
 
 - **トークンはフルアクセス**（エンドポイント単位の権限分離なし）。`.pem` を持つ＝そのテナントで可能な全操作が可能。
   保管は暗号化必須、フロントには絶対に出さない。
-- 旧来の制約として「デバイスのrelease」「移行期限の設定」「MDMトークンの自動更新」はAPI不可とされてきた。
-  ただしAPIは拡張が続いている（users/auditEvents等が追加済み）ため、最新可否は公式で要再確認。
+- 旧来の制約として「デバイスのrelease」「移行期限の設定」「MDMトークンの自動更新」はAPI不可とされてきたが、
+  **移行期限の設定は API 2.3（2026-08-12）で可能になった**（`ASSIGN_DEVICES_WITH_MDM_MIGRATION_DEADLINE` 等）。
+  他もAPIは拡張が続いているため、最新可否は公式で要再確認。
 - 本書のフィールド・挙動は公開Go実装（MPL-2.0等）由来の**実測・推定**。確定はApple公式の各エンドポイントページで。
 
 ---

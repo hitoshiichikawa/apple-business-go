@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### Added
+- **デバイス管理サービス移行（MDM migration）対応（Apple Business API 2.3 / Apple School Manager API 1.6、2026-08-12 追加）**。デバイスを消去せずに別のデバイス管理サービスへ移行できる:
+  - `devices.AssignWithMdmMigrationDeadline`: デバイスを MDM サーバへ割り当てつつ移行期限付きで移行をスケジュール（`activityType=ASSIGN_DEVICES_WITH_MDM_MIGRATION_DEADLINE`）。期限は最大 90 日先（範囲外は 409）。
+  - `devices.UpdateMdmMigrationDeadline`: 進行中の移行の期限を変更（`activityType=UPDATE_MDM_MIGRATION_DEADLINE`。`mdmServer` リレーション不要）。
+  - `devices.CancelMdmMigration`: 進行中の移行をキャンセル（`activityType=CANCEL_MDM_MIGRATION`。`mdmServer`・metadata 不要）。
+  - `devices.ActivityTypeMetadata` 型と activityType 定数 `ActivityAssignWithMdmMigrationDeadline` / `ActivityUpdateMdmMigrationDeadline` / `ActivityCancelMdmMigration` を追加。
+- `devices.DeviceAttributes` に API 2.3 の読み取り専用フィールドを追加: `IsMdmMigrationCapable` / `MdmMigrationStatus` / `MdmMigrationDeadlineDateTime`。列挙値定数 `MdmMigrationStatus*`（REQUESTED / STARTED / SUCCESS / FAILED）も追加。
+- アクティビティの `status` / `subStatus` 定数を公式ドキュメントの列挙値に合わせて拡充: `StatusStopped` / `StatusFailed`、`SubStatusSubmitted` / `SubStatusPreProcessing` / `SubStatusPending` / `SubStatusProcessing` / `SubStatusPostProcessing` / `SubStatusStopping` / `SubStatusCompletedWithSuccess` / `SubStatusCompletedWithFailure` / `SubStatusCompletedPostProcessingFailed`。
+
+### Deprecated
+- `devices.SubStatusCompleted`（`"COMPLETED"`）: 全件成功時の推定値だったが公式列挙に存在しない。`SubStatusCompletedWithSuccess` を使用のこと。
+
 ## [0.7.0] - 2026-07-18
 
 ### Added
