@@ -10,9 +10,14 @@ type (
 	Activity  = applebusiness.ResourceObject[ActivityAttributes]
 )
 
+// Values of OrgDeviceActivityType. The MDM-migration variants require API 2.3+
+// (device management service migration, 2026-08-12).
 const (
-	ActivityAssign   = "ASSIGN_DEVICES"
-	ActivityUnassign = "UNASSIGN_DEVICES"
+	ActivityAssign                         = "ASSIGN_DEVICES"
+	ActivityUnassign                       = "UNASSIGN_DEVICES"
+	ActivityAssignWithMdmMigrationDeadline = "ASSIGN_DEVICES_WITH_MDM_MIGRATION_DEADLINE"
+	ActivityUpdateMdmMigrationDeadline     = "UPDATE_MDM_MIGRATION_DEADLINE"
+	ActivityCancelMdmMigration             = "CANCEL_MDM_MIGRATION"
 )
 
 // DeviceAttributes : /v1/orgDevices
@@ -40,7 +45,21 @@ type DeviceAttributes struct {
 	UpdatedDateTime         string   `json:"updatedDateTime"`
 	ReleaserEntityType      string   `json:"releaserEntityType,omitempty"`
 	ReleaserID              string   `json:"releaserId,omitempty"`
+
+	// Device management service migration (API 2.3+). The status/deadline
+	// fields are set only when a migration has been requested.
+	IsMdmMigrationCapable        bool   `json:"isMdmMigrationCapable,omitempty"`
+	MdmMigrationStatus           string `json:"mdmMigrationStatus,omitempty"` // MdmMigrationStatus: REQUESTED | STARTED | SUCCESS | FAILED
+	MdmMigrationDeadlineDateTime string `json:"mdmMigrationDeadlineDateTime,omitempty"`
 }
+
+// Values of MdmMigrationStatus (DeviceAttributes.MdmMigrationStatus).
+const (
+	MdmMigrationStatusRequested = "REQUESTED"
+	MdmMigrationStatusStarted   = "STARTED"
+	MdmMigrationStatusSuccess   = "SUCCESS"
+	MdmMigrationStatusFailed    = "FAILED"
+)
 
 // MdmServerAttributes : /v1/mdmServers and /v1/orgDevices/{id}/assignedServer
 type MdmServerAttributes struct {
@@ -102,6 +121,14 @@ type ActivityAttributes struct {
 	CreatedDateTime   string `json:"createdDateTime"`
 	CompletedDateTime string `json:"completedDateTime,omitempty"`
 	DownloadURL       string `json:"downloadUrl,omitempty"`
+}
+
+// ActivityTypeMetadata is additional metadata for an orgDeviceActivity, used
+// by the device management service migration activity types (API 2.3+).
+type ActivityTypeMetadata struct {
+	// MdmMigrationDeadlineDateTime is the ISO 8601 deadline by which devices
+	// must complete their migration (at most 90 days in the future).
+	MdmMigrationDeadlineDateTime string `json:"mdmMigrationDeadlineDateTime,omitempty"`
 }
 
 // --- Device Management Services (devices enrolled in Apple MDM) ---

@@ -11,7 +11,8 @@
 
 | 型 | 値 |
 |---|---|
-| `OrgDeviceActivityType` | `ASSIGN_DEVICES`, `UNASSIGN_DEVICES` |
+| `OrgDeviceActivityType` | `ASSIGN_DEVICES`, `UNASSIGN_DEVICES`, `ASSIGN_DEVICES_WITH_MDM_MIGRATION_DEADLINE`（API 2.3+）, `UPDATE_MDM_MIGRATION_DEADLINE`（API 2.3+）, `CANCEL_MDM_MIGRATION`（API 2.3+） |
+| `MdmMigrationStatus`（API 2.3+） | `REQUESTED`, `STARTED`, `SUCCESS`, `FAILED` |
 | `SupportedOS` | `SUPPORTED_OS_UNSPECIFIED`, `SUPPORTED_OS_IPADOS`, `SUPPORTED_OS_IOS`, `SUPPORTED_OS_MACOS`, `SUPPORTED_OS_TVOS`, `SUPPORTED_OS_WATCHOS`, `SUPPORTED_OS_VISIONOS` |
 | `AppleCareCoverageStatus` | `ACTIVE`, `INACTIVE` |
 | `AppleCareCoveragePaymentType` | `ABE_SUBSCRIPTION`, `PAID_UP_FRONT`, `SUBSCRIPTION`, `NONE` |
@@ -45,7 +46,10 @@
 `bluetoothMacAddress`(string), `ethernetMacAddress`([string]), `orderDateTime`(date-time), `orderNumber`(string),
 `partNumber`(string), `productFamily`(string), `productType`(string), `purchaseSourceType`(string),
 `purchaseSourceId`(string), `serialNumber`(string), `status`(string), `updatedDateTime`(date-time),
-`releaserEntityType`(string), `releaserId`(string)
+`releaserEntityType`(string), `releaserId`(string),
+`isMdmMigrationCapable`(boolean, API 2.3+), `mdmMigrationStatus`(MdmMigrationStatus, API 2.3+),
+`mdmMigrationDeadlineDateTime`(date-time, API 2.3+)
+> 移行系フィールド（API 2.3、2026-08-12）: `isMdmMigrationCapable`＝移行可否、`mdmMigrationStatus`／`mdmMigrationDeadlineDateTime` は移行リクエスト済みの場合のみ設定される。
 
 ### MdmDevice.Attributes（`/v1/mdmDevices`）
 > Apple の組み込みデバイス管理サービス（Apple MDM）に登録されたデバイス。`GET /v1/mdmDevices`（クエリ: `fields[mdmDevices]`, `limit`）で一覧取得。SDK は `ListMdmDevices`。
@@ -71,7 +75,9 @@
 
 ### OrgDeviceActivity.Attributes（`/v1/orgDeviceActivities`）
 `createdDateTime`(date-time), `status`(string), `subStatus`(string), `completedDateTime`(date-time), `downloadUrl`(string)
-> 観測値（実API）: `status` は `IN_PROGRESS`→`COMPLETED`（部分失敗でも COMPLETED）。`subStatus` は `COMPLETED_WITH_ERROR`（一部失敗。`downloadUrl` の CSV に明細）。全件成功時の `subStatus` はおそらく `COMPLETED`（未観測）。
+> 公式列挙 — `status`: `COMPLETED` | `IN_PROGRESS` | `STOPPED` | `FAILED` / `subStatus`: `SUBMITTED` | `PRE_PROCESSING` | `PENDING` | `PROCESSING` | `POST_PROCESSING` | `STOPPING` | `COMPLETED_WITH_SUCCESS` | `COMPLETED_WITH_ERROR` | `COMPLETED_WITH_FAILURE` | `COMPLETED_POST_PROCESSING_FAILED`。
+> 観測値（実API）: `status` は `IN_PROGRESS`→`COMPLETED`（部分失敗でも COMPLETED）。`subStatus` は `COMPLETED_WITH_ERROR`（一部失敗。`downloadUrl` の CSV に明細）。
+> 作成リクエストの `attributes` には `activityType`(OrgDeviceActivityType!) に加え、移行系では `activityTypeMetadata`(ActivityTypeMetadata) を指定（API 2.3+）。`ActivityTypeMetadata`: `mdmMigrationDeadlineDateTime`(date-time)＝移行完了期限（最大 90 日先）。`UPDATE_MDM_MIGRATION_DEADLINE` / `CANCEL_MDM_MIGRATION` では `mdmServer` リレーションを指定しない。
 > `COMPLETED_WITH_ERROR` の代表例: **既に同じ MDM サーバへ割り当て済みのデバイスを再割り当て**した場合（状態は変わらずエラー計上）。事前に `assignedServer` で現在の割り当て先を確認すると無駄なエラーを避けられる。
 
 ### AppleCareCoverage.Attributes
@@ -130,7 +136,7 @@
 ### リクエストボディ
 | 型 | 用途 |
 |---|---|
-| `OrgDeviceActivityCreateRequest` | デバイス割り当て/解除アクティビティ作成 |
+| `OrgDeviceActivityCreateRequest` | デバイス割り当て/解除/MDM移行アクティビティ作成（移行系は `activityTypeMetadata` 付き、API 2.3+） |
 | `BlueprintCreateRequest` / `BlueprintUpdateRequest` | Blueprint 作成 / 更新 |
 | `Blueprint{Apps,Configurations,Packages,OrgDevices,Users,UserGroups}LinkagesRequest` | リレーション割り当て（`{data:[{type,id}]}`） |
 | `ConfigurationCreateRequest` / `ConfigurationUpdateRequest` | Configuration 作成 / 更新 |

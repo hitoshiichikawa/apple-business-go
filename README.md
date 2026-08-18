@@ -85,6 +85,20 @@ final, err := svc.PollActivity(ctx, act.ID, 3*time.Second)
 fmt.Println(final.Attributes.Status, final.Attributes.SubStatus)
 ```
 
+## Quickstart (MDM migration, API 2.3+)
+
+Migrate devices to another device management service without erasing them
+(the deadline must be within 90 days):
+
+```go
+act, err := svc.AssignWithMdmMigrationDeadline(ctx, newServerID, deviceIDs, time.Now().AddDate(0, 0, 30))
+// change the deadline: svc.UpdateMdmMigrationDeadline(ctx, deviceIDs, newDeadline)
+// cancel:              svc.CancelMdmMigration(ctx, deviceIDs)
+```
+
+Per-device progress is exposed on `orgDevices` via `IsMdmMigrationCapable`,
+`MdmMigrationStatus` (`REQUESTED`/`STARTED`/`SUCCESS`/`FAILED`), and `MdmMigrationDeadlineDateTime`.
+
 Runnable samples live in [`examples/`](./examples) (`list-devices`, `assign-devices`, `smoke-test`, `dump-all`, `write-test`).
 For a connectivity check use [`smoke-test`](./examples/smoke-test); to dump every read endpoint use [`dump-all`](./examples/dump-all).
 
@@ -167,6 +181,7 @@ c, err := applebusiness.NewClient(
 | `devices` | `ListMdmServers` / `GetMdmServer` / `CreateMdmServer` / `UpdateMdmServer` / `DeleteMdmServer` / `MdmServerDevices` | `/v1/mdmServers(/{id})`, `/v1/mdmServers/{id}/relationships/devices` (CRUD: API 2.1+) |
 | `devices` | `ListMdmDevices` / `MdmDeviceDetails` | `/v1/mdmDevices`, `/v1/mdmDevices/{id}/details` |
 | `devices` | `Assign` / `Unassign` / `GetActivity` / `PollActivity` | `/v1/orgDeviceActivities(/{id})` |
+| `devices` | `AssignWithMdmMigrationDeadline` / `UpdateMdmMigrationDeadline` / `CancelMdmMigration` | `/v1/orgDeviceActivities` (MDM migration: API 2.3+) |
 | `people` | `ListUsers` / `GetUser` | `/v1/users`, `/v1/users/{id}` |
 | `people` | `ListUserGroups` / `GetUserGroup` / `GroupMembers` | `/v1/userGroups(/{id})(/relationships/users)` |
 | `orgunits` | `List` / `Get` / `Members` | `/v1/organizationalUnits(/{id})(/relationships/users)` (API 2.2+) |

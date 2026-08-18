@@ -96,6 +96,27 @@ func TestDeviceGet(t *testing.T) {
 	}
 }
 
+func TestDeviceGetDecodesMdmMigrationFields(t *testing.T) {
+	h := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"type":"orgDevices","id":"D1","attributes":{
+			"serialNumber":"D1","status":"ASSIGNED",
+			"isMdmMigrationCapable":true,
+			"mdmMigrationStatus":"REQUESTED",
+			"mdmMigrationDeadlineDateTime":"2026-09-15T17:00:00.000Z"}}}`))
+	})
+	c := testutil.NewClient(t, h)
+	got, err := New(c).Get(context.Background(), "D1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := got.Attributes
+	if !a.IsMdmMigrationCapable || a.MdmMigrationStatus != MdmMigrationStatusRequested ||
+		a.MdmMigrationDeadlineDateTime != "2026-09-15T17:00:00.000Z" {
+		t.Fatalf("migration fields: %+v", a)
+	}
+}
+
 func TestAssignedServer(t *testing.T) {
 	c := testutil.NewClient(t, devicesHandler(t))
 	srv, err := New(c).AssignedServer(context.Background(), "D1")
