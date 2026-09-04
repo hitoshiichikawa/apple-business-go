@@ -11,7 +11,7 @@
 
 | 型 | 値 |
 |---|---|
-| `OrgDeviceActivityType` | `ASSIGN_DEVICES`, `UNASSIGN_DEVICES`, `ASSIGN_DEVICES_WITH_MDM_MIGRATION_DEADLINE`（API 2.3+）, `UPDATE_MDM_MIGRATION_DEADLINE`（API 2.3+）, `CANCEL_MDM_MIGRATION`（API 2.3+） |
+| `OrgDeviceActivityType` | `ASSIGN_DEVICES`, `UNASSIGN_DEVICES`, `ASSIGN_DEVICES_WITH_MDM_MIGRATION_DEADLINE`（API 2.3+）, `UPDATE_MDM_MIGRATION_DEADLINE`（API 2.3+）, `CANCEL_MDM_MIGRATION`（API 2.3+）, `RELEASE_DEVICES`（API 2.4+） |
 | `MdmMigrationStatus`（API 2.3+） | `REQUESTED`, `STARTED`, `SUCCESS`, `FAILED` |
 | `SupportedOS` | `SUPPORTED_OS_UNSPECIFIED`, `SUPPORTED_OS_IPADOS`, `SUPPORTED_OS_IOS`, `SUPPORTED_OS_MACOS`, `SUPPORTED_OS_TVOS`, `SUPPORTED_OS_WATCHOS`, `SUPPORTED_OS_VISIONOS` |
 | `AppleCareCoverageStatus` | `ACTIVE`, `INACTIVE` |
@@ -77,7 +77,8 @@
 `createdDateTime`(date-time), `status`(string), `subStatus`(string), `completedDateTime`(date-time), `downloadUrl`(string)
 > 公式列挙 — `status`: `COMPLETED` | `IN_PROGRESS` | `STOPPED` | `FAILED` / `subStatus`: `SUBMITTED` | `PRE_PROCESSING` | `PENDING` | `PROCESSING` | `POST_PROCESSING` | `STOPPING` | `COMPLETED_WITH_SUCCESS` | `COMPLETED_WITH_ERROR` | `COMPLETED_WITH_FAILURE` | `COMPLETED_POST_PROCESSING_FAILED`。
 > 観測値（実API）: `status` は `IN_PROGRESS`→`COMPLETED`（部分失敗でも COMPLETED）。`subStatus` は `COMPLETED_WITH_ERROR`（一部失敗。`downloadUrl` の CSV に明細）。
-> 作成リクエストの `attributes` には `activityType`(OrgDeviceActivityType!) に加え、移行系では `activityTypeMetadata`(ActivityTypeMetadata) を指定（API 2.3+）。`ActivityTypeMetadata`: `mdmMigrationDeadlineDateTime`(date-time)＝移行完了期限（最大 90 日先）。`UPDATE_MDM_MIGRATION_DEADLINE` / `CANCEL_MDM_MIGRATION` では `mdmServer` リレーションを指定しない。
+> 作成リクエストの `attributes` には `activityType`(OrgDeviceActivityType!) に加え、移行系では `activityTypeMetadata`(ActivityTypeMetadata) を指定（API 2.3+）。`ActivityTypeMetadata`: `mdmMigrationDeadlineDateTime`(date-time)＝移行完了期限（最大 90 日先）。`UPDATE_MDM_MIGRATION_DEADLINE` / `CANCEL_MDM_MIGRATION` / `RELEASE_DEVICES` では `mdmServer` リレーションを指定しない。
+> `RELEASE_DEVICES`（API 2.4+、2026-08-26）は組織からデバイスをリリースする破壊的操作: 組織への登録が解除され、デバイス登録割り当てが削除され、組み込みデバイス管理サービス（Apple MDM）から登録解除され、Blueprint からも削除される。
 > `COMPLETED_WITH_ERROR` の代表例: **既に同じ MDM サーバへ割り当て済みのデバイスを再割り当て**した場合（状態は変わらずエラー計上）。事前に `assignedServer` で現在の割り当て先を確認すると無駄なエラーを避けられる。
 
 ### AppleCareCoverage.Attributes

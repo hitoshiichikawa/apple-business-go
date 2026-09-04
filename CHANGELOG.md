@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Added
+- **デバイスのリリース対応（Apple Business API 2.4、2026-08-26 追加）**（#33）:
+  - `devices.ReleaseDevices`: 組織からデバイスをリリース（`activityType=RELEASE_DEVICES`。`mdmServer` リレーション・metadata 不要）。**破壊的操作**: リリースされたデバイスは組織への登録が解除され、デバイス登録割り当てが削除され、組み込みデバイス管理サービス（Apple MDM）から登録解除され、Blueprint からも削除される。API からの取り消しは不可。
+  - activityType 定数 `ActivityReleaseDevices` を追加。
+
 ## [0.8.0] - 2026-08-18
 
 ### Added
