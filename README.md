@@ -99,6 +99,19 @@ act, err := svc.AssignWithMdmMigrationDeadline(ctx, newServerID, deviceIDs, time
 Per-device progress is exposed on `orgDevices` via `IsMdmMigrationCapable`,
 `MdmMigrationStatus` (`REQUESTED`/`STARTED`/`SUCCESS`/`FAILED`), and `MdmMigrationDeadlineDateTime`.
 
+## Quickstart (release devices, API 2.4+)
+
+Release devices from the organization. **Destructive**: released devices are no
+longer registered to the organization, their device enrollment assignments are
+removed, they are unenrolled from the built-in device management service
+(Apple MDM), and they are removed from Blueprints. This cannot be undone via
+the API.
+
+```go
+act, err := svc.ReleaseDevices(ctx, deviceIDs)
+final, err := svc.PollActivity(ctx, act.ID, 3*time.Second)
+```
+
 Runnable samples live in [`examples/`](./examples) (`list-devices`, `assign-devices`, `smoke-test`, `dump-all`, `write-test`).
 For a connectivity check use [`smoke-test`](./examples/smoke-test); to dump every read endpoint use [`dump-all`](./examples/dump-all).
 
@@ -182,6 +195,7 @@ c, err := applebusiness.NewClient(
 | `devices` | `ListMdmDevices` / `MdmDeviceDetails` | `/v1/mdmDevices`, `/v1/mdmDevices/{id}/details` |
 | `devices` | `Assign` / `Unassign` / `GetActivity` / `PollActivity` | `/v1/orgDeviceActivities(/{id})` |
 | `devices` | `AssignWithMdmMigrationDeadline` / `UpdateMdmMigrationDeadline` / `CancelMdmMigration` | `/v1/orgDeviceActivities` (MDM migration: API 2.3+) |
+| `devices` | `ReleaseDevices` | `/v1/orgDeviceActivities` (release: API 2.4+) |
 | `people` | `ListUsers` / `GetUser` | `/v1/users`, `/v1/users/{id}` |
 | `people` | `ListUserGroups` / `GetUserGroup` / `GroupMembers` | `/v1/userGroups(/{id})(/relationships/users)` |
 | `orgunits` | `List` / `Get` / `Members` | `/v1/organizationalUnits(/{id})(/relationships/users)` (API 2.2+) |

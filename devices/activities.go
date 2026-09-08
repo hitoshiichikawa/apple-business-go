@@ -64,6 +64,15 @@ func (s *Service) CancelMdmMigration(ctx context.Context, deviceIDs []string) (*
 	return s.createActivity(ctx, ActivityCancelMdmMigration, "", deviceIDs, nil)
 }
 
+// ReleaseDevices releases the given devices from the organization (API 2.4+).
+// Destructive: released devices are no longer registered to the organization,
+// their device enrollment assignments are removed, they are unenrolled from
+// the built-in device management service (Apple MDM), and they are removed
+// from Blueprints. This cannot be undone via the API.
+func (s *Service) ReleaseDevices(ctx context.Context, deviceIDs []string) (*Activity, error) {
+	return s.createActivity(ctx, ActivityReleaseDevices, "", deviceIDs, nil)
+}
+
 // formatDeadline renders an ISO 8601 timestamp with millisecond precision,
 // matching Apple's documented examples (e.g. 2026-03-15T17:00:00.000Z).
 func formatDeadline(t time.Time) string {
@@ -72,7 +81,7 @@ func formatDeadline(t time.Time) string {
 
 // createActivity posts an orgDeviceActivity. serverID may be empty for
 // activity types that don't take an mdmServer relationship
-// (UPDATE_MDM_MIGRATION_DEADLINE / CANCEL_MDM_MIGRATION).
+// (UPDATE_MDM_MIGRATION_DEADLINE / CANCEL_MDM_MIGRATION / RELEASE_DEVICES).
 func (s *Service) createActivity(ctx context.Context, activityType, serverID string, deviceIDs []string, meta *ActivityTypeMetadata) (*Activity, error) {
 	var body activityCreate
 	body.Data.Type = "orgDeviceActivities"

@@ -11,13 +11,15 @@ type (
 )
 
 // Values of OrgDeviceActivityType. The MDM-migration variants require API 2.3+
-// (device management service migration, 2026-08-12).
+// (device management service migration, 2026-08-12); RELEASE_DEVICES requires
+// API 2.4+ (2026-08-26).
 const (
 	ActivityAssign                         = "ASSIGN_DEVICES"
 	ActivityUnassign                       = "UNASSIGN_DEVICES"
 	ActivityAssignWithMdmMigrationDeadline = "ASSIGN_DEVICES_WITH_MDM_MIGRATION_DEADLINE"
 	ActivityUpdateMdmMigrationDeadline     = "UPDATE_MDM_MIGRATION_DEADLINE"
 	ActivityCancelMdmMigration             = "CANCEL_MDM_MIGRATION"
+	ActivityReleaseDevices                 = "RELEASE_DEVICES"
 )
 
 // DeviceAttributes : /v1/orgDevices

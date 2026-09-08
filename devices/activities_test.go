@@ -175,6 +175,30 @@ func TestCancelMdmMigrationOmitsServerAndMetadata(t *testing.T) {
 	}
 }
 
+func TestReleaseDevicesOmitsServerAndMetadata(t *testing.T) {
+	var body migrationBody
+	c := newActivityCaptureServer(t, &body)
+	act, err := New(c).ReleaseDevices(context.Background(), []string{"D1", "D2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if act.ID != "ACT3" {
+		t.Fatalf("activity: %+v", act)
+	}
+	if body.Data.Attributes.ActivityType != ActivityReleaseDevices {
+		t.Fatalf("activityType: %q", body.Data.Attributes.ActivityType)
+	}
+	if body.Data.Attributes.ActivityTypeMetadata != nil {
+		t.Fatalf("activityTypeMetadata should be omitted: %v", body.Data.Attributes.ActivityTypeMetadata)
+	}
+	if _, ok := body.Data.Relationships["mdmServer"]; ok {
+		t.Fatalf("mdmServer relationship should be omitted: %v", body.Data.Relationships)
+	}
+	if _, ok := body.Data.Relationships["devices"]; !ok {
+		t.Fatalf("devices relationship missing: %v", body.Data.Relationships)
+	}
+}
+
 func TestPollActivityUntilTerminal(t *testing.T) {
 	var calls int
 	h := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
