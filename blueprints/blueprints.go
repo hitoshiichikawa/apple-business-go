@@ -137,16 +137,27 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 }
 
 // AddTo adds related resources to a relationship (POST). rel is a Rel* constant.
+// An empty ids is a no-op: no request is sent.
 func (s *Service) AddTo(ctx context.Context, id, rel string, ids []string) error {
 	return s.modifyRel(ctx, http.MethodPost, id, rel, ids)
 }
 
 // RemoveFrom removes related resources from a relationship (DELETE).
+// An empty ids is a no-op: no request is sent.
 func (s *Service) RemoveFrom(ctx context.Context, id, rel string, ids []string) error {
 	return s.modifyRel(ctx, http.MethodDelete, id, rel, ids)
 }
 
 // Replace replaces the set of members in a relationship (PATCH).
+//
+// An empty (or nil) ids clears the relationship: the request is sent with
+// {"data":[]}. Apple may reject a change that would leave the Blueprint without
+// any apps/packages/configurations, or without any orgDevices/users/userGroups,
+// with 409 ENTITY_ERROR.RELATIONSHIP.INVALID.MISSING_RESOURCES /
+// MISSING_MEMBERS. That rule is confirmed on a real tenant for Create; whether
+// it also applies to relationship updates is not yet confirmed (see
+// examples/write-test -replace-empty). Detect the rejection with
+// applebusiness.IsConflict.
 func (s *Service) Replace(ctx context.Context, id, rel string, ids []string) error {
 	return s.modifyRel(ctx, http.MethodPatch, id, rel, ids)
 }
@@ -155,9 +166,12 @@ func (s *Service) modifyRel(ctx context.Context, method, id, rel string, ids []s
 	if err := checkRel(rel); err != nil {
 		return err
 	}
-	if len(ids) == 0 {
+	// 追加・削除の空集合は「何もしない」と等価なので送らない。置換（PATCH）の
+	// 空集合は「関連を空にする」意味を持つため、そのまま送る（#36）。
+	if len(ids) == 0 && method != http.MethodPatch {
 		return nil
 	}
+	// 長さ 0 でも非 nil のスライスにする（nil だと {"data":null} になる）。
 	items := make([]applebusiness.Data, len(ids))
 	for i, x := range ids {
 		items[i] = applebusiness.Data{Type: rel, ID: x} // rel名 == type
