@@ -3,6 +3,8 @@ package blueprints
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -180,6 +182,114 @@ func TestBlueprintRelationshipModify(t *testing.T) {
 				t.Fatalf("body data: %+v", body.Data)
 			}
 		})
+	}
+}
+
+// recordedRequest は 1 リクエスト分のメソッド・パス・生ボディ。
+type recordedRequest struct {
+	Method, Path, Body string
+}
+
+// recordingHandler は受信したリクエストを記録し、status（204 以外なら body を JSON で）を返す。
+func recordingHandler(t *testing.T, got *[]recordedRequest, status int, body any) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		*got = append(*got, recordedRequest{Method: r.Method, Path: r.URL.Path, Body: string(raw)})
+		if status == http.StatusNoContent {
+			w.WriteHeader(status)
+			return
+		}
+		testutil.WriteJSON(t, w, status, body)
+	})
+}
+
+func TestReplace_EmptyIDs_SendsPatchWithEmptyDataArray(t *testing.T) {
+	// Arrange
+	var got []recordedRequest
+	c := testutil.NewClient(t, recordingHandler(t, &got, http.StatusNoContent, nil))
+
+	// Act
+	err := New(c).Replace(context.Background(), "BP1", RelApps, []string{})
+
+	// Assert
+	if err != nil {
+		t.Fatalf("Replace(empty) = %v, want nil", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("requests = %d, want exactly 1", len(got))
+	}
+	if got[0].Method != http.MethodPatch || got[0].Path != "/v1/blueprints/BP1/relationships/apps" {
+		t.Fatalf("sent %s %s", got[0].Method, got[0].Path)
+	}
+	if strings.TrimSpace(got[0].Body) != `{"data":[]}` {
+		t.Fatalf("body = %q, want {\"data\":[]} (never null)", got[0].Body)
+	}
+}
+
+func TestReplace_NilIDs_SendsPatchWithEmptyDataArray(t *testing.T) {
+	// Arrange
+	var got []recordedRequest
+	c := testutil.NewClient(t, recordingHandler(t, &got, http.StatusNoContent, nil))
+
+	// Act
+	err := New(c).Replace(context.Background(), "BP1", RelConfigurations, nil)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("Replace(nil) = %v, want nil", err)
+	}
+	if len(got) != 1 || strings.TrimSpace(got[0].Body) != `{"data":[]}` {
+		t.Fatalf("requests = %+v, want one PATCH with {\"data\":[]}", got)
+	}
+}
+
+func TestAddTo_EmptyIDs_SendsNoRequest(t *testing.T) {
+	// Arrange
+	var got []recordedRequest
+	c := testutil.NewClient(t, recordingHandler(t, &got, http.StatusNoContent, nil))
+
+	// Act
+	err := New(c).AddTo(context.Background(), "BP1", RelApps, []string{})
+
+	// Assert
+	if err != nil || len(got) != 0 {
+		t.Fatalf("AddTo(empty): err=%v requests=%d, want nil and 0", err, len(got))
+	}
+}
+
+func TestRemoveFrom_EmptyIDs_SendsNoRequest(t *testing.T) {
+	// Arrange
+	var got []recordedRequest
+	c := testutil.NewClient(t, recordingHandler(t, &got, http.StatusNoContent, nil))
+
+	// Act
+	err := New(c).RemoveFrom(context.Background(), "BP1", RelApps, []string{})
+
+	// Assert
+	if err != nil || len(got) != 0 {
+		t.Fatalf("RemoveFrom(empty): err=%v requests=%d, want nil and 0", err, len(got))
+	}
+}
+
+func TestReplace_EmptyIDsRejectedWith409_ReturnsConflictError(t *testing.T) {
+	// Arrange: 中身が 0 件になる置換を実機同様に 409 MISSING_RESOURCES で拒否するサーバ
+	const code = "ENTITY_ERROR.RELATIONSHIP.INVALID.MISSING_RESOURCES"
+	var got []recordedRequest
+	c := testutil.NewClient(t, recordingHandler(t, &got, http.StatusConflict, map[string]any{
+		"errors": []map[string]any{{"status": "409", "code": code, "title": "Missing required data."}},
+	}))
+
+	// Act
+	err := New(c).Replace(context.Background(), "BP1", RelConfigurations, []string{})
+
+	// Assert
+	if !applebusiness.IsConflict(err) {
+		t.Fatalf("IsConflict(%v) = false, want true", err)
+	}
+	var ae *applebusiness.APIError
+	if !errors.As(err, &ae) || len(ae.Errors) == 0 || ae.Errors[0].Code != code {
+		t.Fatalf("err = %v, want APIError carrying code %s", err, code)
 	}
 }
 

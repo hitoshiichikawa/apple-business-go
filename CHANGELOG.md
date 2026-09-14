@@ -11,9 +11,11 @@
 ### Added
 - `APIError.Header`（レスポンスヘッダー、`json:"-"`）と `APIError.RetryAfter`（`Retry-After` を秒数・HTTP-date の両形式で解釈した値。ヘッダーなし・解釈不能・過去の日時は 0）を追加（#35）。Apple は 429 に `Retry-After` を付けるかを公表していないため、0 の場合は呼び出し側のバックオフに任せる。
 - 429 / 5xx でリトライを使い切った場合（またはリトライ無効の場合）も、最後の応答の本文を `APIError.Errors` / `APIError.RawBody` に保持する（#35）。従来はステータスコードのみで、本文は破棄されていた。
+- `examples/write-test` に `-replace-empty` を追加。テスト用 Blueprint で空集合の `Replace` を実機で試し、作成時の「中身（apps/packages/configurations）と割り当て先（orgDevices/users/userGroups）が各 1 件以上」という制約（409 `MISSING_RESOURCES` / `MISSING_MEMBERS`）が関連の更新時にもかかるかを確認できる（#36）。
 
 ### Fixed
 - `Config.MaxRetries` が負の値のとき、`Client.Do` がリクエストを 1 回も送らずに `nil` エラーを返していた（`Get` 等がゼロ値のリソースを成功として返していた）不具合を修正（#35）。負の値はリトライ無効（1 回だけ送信）として扱う。0（ゼロ値）は従来どおり既定の 4 回。
+- `blueprints.Replace` に空集合（nil を含む）を渡すと、API を呼ばずに成功扱いで返していた問題を修正。`{"data":[]}` を PATCH して関連を空にする（#36）。**挙動の変更**: 関連が空になる置換を Apple が 409 で拒否した場合は、そのエラーを返す（`applebusiness.IsConflict` で判定可）。`AddTo` / `RemoveFrom` の空集合は従来どおり何も送らない。
 
 ## [0.9.0] - 2026-09-08
 
