@@ -185,6 +185,41 @@ c, err := applebusiness.NewClient(
 
 ---
 
+## Retries and rate limits
+
+A `Client` retries `429` / `5xx` responses with exponential backoff (0.5s, 1s, 2s, ... capped at 16s),
+waiting for `Retry-After` instead when the server sends one (delay-seconds or HTTP-date).
+POST is retried only on `429`: a `5xx` or network error after a POST may mean the write was already
+committed.
+
+| Setting | Retries |
+|---|---|
+| Default (`Config.MaxRetries` is 0, no option) | up to 4 |
+| `Config.MaxRetries` = n > 0, or `WithMaxRetries(n)` | up to n |
+| `Config.MaxRetries` < 0, or `WithMaxRetries(0)` | none — every request is sent exactly once |
+
+`WithMaxRetries` takes precedence over `Config.MaxRetries`.
+
+If you rate-limit above the SDK (e.g. a job queue that pauses on `429`), disable retries so they are not
+doubled, and use the returned `*applebusiness.APIError`. For `429` / `5xx` it describes the last response:
+status, decoded body (`Errors` / `RawBody`), `Header`, and the parsed `RetryAfter`.
+
+```go
+c, err := applebusiness.NewClient(cfg, applebusiness.WithMaxRetries(0))
+// ... call an API ...
+var apiErr *applebusiness.APIError
+if applebusiness.IsRateLimited(err) && errors.As(err, &apiErr) {
+    wait := apiErr.RetryAfter // 0 when the server sent no Retry-After: fall back to your own backoff
+    _ = wait
+}
+```
+
+> [!NOTE]
+> Apple does not document whether rate-limited responses carry `Retry-After`, so always have a fallback
+> backoff. A `429` from the **token endpoint** is not an `*APIError` (see [Authentication](#authentication)).
+
+---
+
 ## Supported endpoints
 
 | Package | Methods | API |
@@ -222,6 +257,7 @@ endpoint details are in [`docs/apple-business-api-reference.md`](./docs/apple-bu
 - [x] `ListSeq` (lazy paging via Go 1.23 range-over-func)
 - [x] Unit tests (`httptest`) for all packages / CHANGELOG / golangci-lint / CI (gofmt, vet, build, test -race, lint)
 - [x] Idempotency review of write retries: POST is retried only on 429; 5xx / network errors on POST return immediately (other methods retry on 429/5xx as before)
+- [x] Retry control for callers that rate-limit themselves: `WithMaxRetries(0)` disables retries; `APIError` keeps `Header` / `RetryAfter` / body for 429 and 5xx (see [Retries and rate limits](#retries-and-rate-limits))
 - [ ] `brand` / `support` packages (future; `brand` has no public API spec yet — see [`ROADMAP.md`](./ROADMAP.md))
 
 ---

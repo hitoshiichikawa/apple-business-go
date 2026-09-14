@@ -28,7 +28,27 @@ type Config struct {
 	BaseURL     string // defaults to DefaultBusinessBaseURL
 	Credentials Credentials
 	HTTPClient  *http.Client // used for OAuth; defaults are applied when nil
-	MaxRetries  int          // retry count on 429 / 5xx; 4 when 0
+	// MaxRetries is the retry count on 429 / 5xx responses. 0 (the zero value)
+	// means the default of 4; a negative value disables retries so every
+	// request is sent exactly once. WithMaxRetries, when given, takes precedence.
+	MaxRetries int
+}
+
+// defaultMaxRetries is used when neither Config.MaxRetries nor WithMaxRetries
+// specifies a retry count.
+const defaultMaxRetries = 4
+
+// configMaxRetries maps Config.MaxRetries to an effective retry count: 0 keeps
+// the zero value meaning "default", a negative value disables retries.
+func configMaxRetries(n int) int {
+	switch {
+	case n == 0:
+		return defaultMaxRetries
+	case n < 0:
+		return 0
+	default:
+		return n
+	}
 }
 
 // Client is an authenticated HTTP client for the Apple Business / School Manager API.
@@ -63,14 +83,20 @@ func sameOrigin(u, origin *url.URL) bool {
 // In addition to the Config values, settings can be overridden with Options
 // (WithBaseURL / WithTokenURL / WithMaxRetries / WithUserAgent / WithHTTPClient /
 // WithTokenSource).
+//
+// Requests are retried on 429 / 5xx up to 4 times by default. Set
+// Config.MaxRetries to a negative value, or pass WithMaxRetries(0), to disable
+// retries and handle rate limiting yourself.
 func NewClient(cfg Config, opts ...Option) (*Client, error) {
 	o := options{
 		baseURL:    cfg.BaseURL,
-		maxRetries: cfg.MaxRetries,
 		httpClient: cfg.HTTPClient,
 	}
 	for _, fn := range opts {
 		fn(&o)
+	}
+	if !o.maxRetriesSet {
+		o.maxRetries = configMaxRetries(cfg.MaxRetries)
 	}
 
 	// Resolve the token source. An injected source (WithTokenSource) wins and
@@ -86,9 +112,6 @@ func NewClient(cfg Config, opts ...Option) (*Client, error) {
 
 	if o.baseURL == "" {
 		o.baseURL = DefaultBusinessBaseURL
-	}
-	if o.maxRetries == 0 {
-		o.maxRetries = 4
 	}
 
 	origin, err := url.Parse(o.baseURL)
@@ -144,10 +167,16 @@ func (c *Client) AccessToken() (string, time.Time, error) {
 func (c *Client) BaseURL() string { return c.baseURL }
 
 // Do sends a request to the given absolute URL and decodes the response into out.
-// 429 / 5xx responses are retried with exponential backoff (honoring Retry-After),
-// with one exception: POST requests are retried only on 429. A 5xx (or a network
+// 429 / 5xx responses are retried with exponential backoff (honoring Retry-After)
+// up to the client's retry count (Config.MaxRetries / WithMaxRetries), with one
+// exception: POST requests are retried only on 429. A 5xx (or a network
 // error) after a POST may mean the server already committed the write, so
 // retrying could execute it twice; those errors are returned immediately.
+// With retries disabled the request is sent exactly once.
+//
+// A non-2xx response that is not retried, or the last one when retries are
+// exhausted, is returned as *APIError with its status, decoded body, response
+// headers and parsed Retry-After.
 // It is normally used by service packages through List/Get/Create.
 //
 // Because the bearer token is attached to every request, rawurl must point at
@@ -162,8 +191,9 @@ func (c *Client) Do(ctx context.Context, method, rawurl string, body []byte, out
 		return fmt.Errorf("%w: %q (base %q)", errCrossHost, rawurl, c.baseURL)
 	}
 
-	var lastErr error
-	for attempt := 0; attempt <= c.maxRetries; attempt++ {
+	// 条件なしのループにして、maxRetries がいくつでも必ず 1 回は送信する。
+	// 各分岐は return か continue でしか抜けない（送信せずに nil を返す経路を作らない）。
+	for attempt := 0; ; attempt++ {
 		var reader io.Reader
 		if body != nil {
 			reader = bytes.NewReader(body)
@@ -198,8 +228,7 @@ func (c *Client) Do(ctx context.Context, method, rawurl string, body []byte, out
 			if method == http.MethodPost {
 				return err
 			}
-			lastErr = err
-			if attempt == c.maxRetries || !sleepBackoff(ctx, attempt, 0) {
+			if attempt >= c.maxRetries || !sleepBackoff(ctx, attempt, 0) {
 				return err
 			}
 			continue
@@ -210,11 +239,12 @@ func (c *Client) Do(ctx context.Context, method, rawurl string, body []byte, out
 		retryable := resp.StatusCode == http.StatusTooManyRequests ||
 			(resp.StatusCode >= 500 && method != http.MethodPost)
 		if retryable {
-			wait := retryAfter(resp)
+			// 最後の応答の本文・ヘッダー・Retry-After を呼び出し側へ残すため、
+			// 毎回デコードしてから判定する（本文の読み取りは上限付き）。
+			apiErr := decodeAPIError(resp)
 			drainAndClose(resp.Body)
-			lastErr = &APIError{StatusCode: resp.StatusCode}
-			if attempt == c.maxRetries || !sleepBackoff(ctx, attempt, wait) {
-				return lastErr
+			if attempt >= c.maxRetries || !sleepBackoff(ctx, attempt, apiErr.RetryAfter) {
+				return apiErr
 			}
 			continue
 		}
@@ -238,7 +268,6 @@ func (c *Client) Do(ctx context.Context, method, rawurl string, body []byte, out
 		}
 		return nil
 	}
-	return lastErr
 }
 
 // 異常応答（巨大ボディ）からの保護。正常なページ応答には十分すぎる上限を取る。
@@ -414,10 +443,27 @@ func sleepBackoff(ctx context.Context, attempt int, base time.Duration) bool {
 	}
 }
 
-func retryAfter(resp *http.Response) time.Duration {
-	if v := resp.Header.Get("Retry-After"); v != "" {
-		if secs, err := strconv.Atoi(v); err == nil {
-			return time.Duration(secs) * time.Second
+// maxRetryAfterSeconds bounds delay-seconds so the conversion to time.Duration
+// cannot overflow; larger values are treated as unparsable.
+const maxRetryAfterSeconds = math.MaxInt64 / int64(time.Second)
+
+// parseRetryAfter interprets a Retry-After header value (RFC 9110 §10.2.3),
+// either delay-seconds or an HTTP-date relative to now. An absent, unparsable,
+// non-positive or past value yields 0, meaning "not specified".
+func parseRetryAfter(v string, now time.Time) time.Duration {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return 0
+	}
+	if secs, err := strconv.ParseInt(v, 10, 64); err == nil {
+		if secs <= 0 || secs > maxRetryAfterSeconds {
+			return 0
+		}
+		return time.Duration(secs) * time.Second
+	}
+	if t, err := http.ParseTime(v); err == nil {
+		if d := t.Sub(now); d > 0 {
+			return d
 		}
 	}
 	return 0

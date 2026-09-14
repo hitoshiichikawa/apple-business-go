@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // ErrorObject is a single JSON:API error entry inside an APIError.
@@ -17,7 +18,9 @@ type ErrorObject struct {
 	Detail string `json:"detail"`
 }
 
-// APIError is a JSON:API error response.
+// APIError is a non-2xx API response (a JSON:API error document when the
+// server sent one). For 429 / 5xx it describes the last response received,
+// after retries were exhausted or when retries are disabled.
 type APIError struct {
 	StatusCode int
 	Errors     []ErrorObject `json:"errors"`
@@ -25,6 +28,15 @@ type APIError struct {
 	// a parsable JSON:API error document (e.g. an HTML page from a proxy).
 	// It is empty when Errors is populated.
 	RawBody string `json:"-"`
+	// Header holds the response headers (e.g. Retry-After, or request IDs to
+	// quote to support). Like RawBody it is excluded from JSON so that logging
+	// an APIError as JSON does not dump headers unintentionally.
+	Header http.Header `json:"-"`
+	// RetryAfter is the server's Retry-After header, parsed from either
+	// delay-seconds or an HTTP-date. It is 0 when the header is absent,
+	// unparsable, or already in the past; callers must then fall back to their
+	// own backoff (Apple does not document whether 429 responses carry it).
+	RetryAfter time.Duration `json:"-"`
 }
 
 func (e *APIError) Error() string {
@@ -46,9 +58,15 @@ const (
 // decodeAPIError builds an *APIError from a non-2xx response. JSON:API error
 // documents populate Errors; anything else (HTML from a load balancer, plain
 // text, ...) is kept as a truncated RawBody snippet so the caller still gets
-// a clue about what the server said.
-func decodeAPIError(resp *http.Response) error {
-	e := &APIError{StatusCode: resp.StatusCode}
+// a clue about what the server said. The response headers and the parsed
+// Retry-After are always kept. The body is read up to errBodyReadLimit; the
+// caller remains responsible for draining and closing it.
+func decodeAPIError(resp *http.Response) *APIError {
+	e := &APIError{
+		StatusCode: resp.StatusCode,
+		Header:     resp.Header,
+		RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"), time.Now()),
+	}
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, errBodyReadLimit))
 	if json.Unmarshal(raw, e) == nil && len(e.Errors) > 0 {
 		return e
@@ -70,7 +88,9 @@ func decodeAPIError(resp *http.Response) error {
 // IsNotFound reports whether err is a 404.
 func IsNotFound(err error) bool { return statusIs(err, 404) }
 
-// IsRateLimited reports whether err is a 429 (including the value returned when retries are exhausted).
+// IsRateLimited reports whether err is a 429 (including the value returned when
+// retries are exhausted or disabled). Read APIError.RetryAfter via errors.As to
+// learn when to try again; it is 0 when the server did not say.
 func IsRateLimited(err error) bool { return statusIs(err, 429) }
 
 // IsUnauthorized reports whether err is a 401.

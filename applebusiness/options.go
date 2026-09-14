@@ -10,12 +10,15 @@ import (
 type Option func(*options)
 
 type options struct {
-	baseURL     string
-	tokenURL    string
-	maxRetries  int
-	userAgent   string
-	httpClient  *http.Client
-	tokenSource oauth2.TokenSource
+	baseURL    string
+	tokenURL   string
+	maxRetries int
+	// maxRetriesSet は WithMaxRetries が指定されたか。WithMaxRetries(0) は
+	// 「未指定」ではなく「リトライなし」を意味するため、指定の有無を別に持つ。
+	maxRetriesSet bool
+	userAgent     string
+	httpClient    *http.Client
+	tokenSource   oauth2.TokenSource
 }
 
 // WithBaseURL overrides the API base URL (defaults to DefaultBusinessBaseURL).
@@ -36,12 +39,18 @@ func WithTokenURL(u string) Option {
 	}
 }
 
-// WithMaxRetries sets the retry count on 429 / 5xx responses (0 is treated as the default of 4).
+// WithMaxRetries sets the retry count on 429 / 5xx responses (and on network
+// errors for non-POST requests). When given, it takes precedence over
+// Config.MaxRetries.
+//
+// n <= 0 disables retries: every request is sent exactly once and the first
+// failure is returned as-is, e.g. a 429 *APIError whose RetryAfter and Header
+// tell the caller when to try again. Use it when rate limiting is handled above
+// the SDK (such as a job queue that pauses on 429) so retries are not doubled.
 func WithMaxRetries(n int) Option {
 	return func(o *options) {
-		if n > 0 {
-			o.maxRetries = n
-		}
+		o.maxRetries = max(n, 0)
+		o.maxRetriesSet = true
 	}
 }
 

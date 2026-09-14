@@ -10,10 +10,12 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -62,20 +64,47 @@ func startTokenServer(t *testing.T, capture *url.Values) *httptest.Server {
 	return s
 }
 
-func newTestClient(t *testing.T, apiURL, tokURL string, opts ...Option) *Client {
+func testCredentials(t *testing.T) Credentials {
 	t.Helper()
-	all := []Option{WithBaseURL(apiURL), WithTokenURL(tokURL)}
-	all = append(all, opts...)
-	c, err := NewClient(Config{Credentials: Credentials{
+	return Credentials{
 		ClientID:   "BUSINESSAPI.test",
 		TeamID:     "BUSINESSAPI.test",
 		KeyID:      "test-kid",
 		PrivateKey: testKeyPEM(t),
-	}}, all...)
+	}
+}
+
+func newTestClient(t *testing.T, apiURL, tokURL string, opts ...Option) *Client {
+	t.Helper()
+	return newTestClientConfig(t, Config{}, apiURL, tokURL, opts...)
+}
+
+// newTestClientConfig は cfg にテスト用の Credentials を補って Client を作る（MaxRetries 等の Config 検証用）。
+func newTestClientConfig(t *testing.T, cfg Config, apiURL, tokURL string, opts ...Option) *Client {
+	t.Helper()
+	cfg.Credentials = testCredentials(t)
+	all := []Option{WithBaseURL(apiURL), WithTokenURL(tokURL)}
+	all = append(all, opts...)
+	c, err := NewClient(cfg, all...)
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
 	return c
+}
+
+// countingServer は受信のたびに calls を加算してから h に委ねる API サーバを起動する。
+func countingServer(t *testing.T, calls *atomic.Int32, h http.HandlerFunc) *httptest.Server {
+	t.Helper()
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		h(w, r)
+	}))
+	t.Cleanup(s.Close)
+	return s
+}
+
+func alwaysRateLimited(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusTooManyRequests)
 }
 
 func TestTokenExchangeAndGet(t *testing.T) {
@@ -567,5 +596,220 @@ func TestRateLimitedExhausted(t *testing.T) {
 	}
 	if !IsRateLimited(err) {
 		t.Fatalf("IsRateLimited = false for %v", err)
+	}
+}
+
+func TestWithMaxRetriesNonPositiveReturnsFirst429(t *testing.T) {
+	for _, n := range []int{0, -1} {
+		t.Run(fmt.Sprintf("n=%d", n), func(t *testing.T) {
+			// Arrange
+			tok := startTokenServer(t, nil)
+			var calls atomic.Int32
+			api := countingServer(t, &calls, alwaysRateLimited)
+			c := newTestClient(t, api.URL, tok.URL, WithMaxRetries(n))
+
+			// Act
+			_, err := Get[testAttrs](context.Background(), c, "/v1/things/1")
+
+			// Assert
+			if !IsRateLimited(err) {
+				t.Fatalf("err = %v, want the 429", err)
+			}
+			if got := calls.Load(); got != 1 {
+				t.Fatalf("requests = %d, want exactly 1 (no retries)", got)
+			}
+		})
+	}
+}
+
+func TestWithMaxRetriesZeroOverridesConfig(t *testing.T) {
+	// Arrange
+	tok := startTokenServer(t, nil)
+	var calls atomic.Int32
+	api := countingServer(t, &calls, alwaysRateLimited)
+	c := newTestClientConfig(t, Config{MaxRetries: 3}, api.URL, tok.URL, WithMaxRetries(0))
+
+	// Act
+	_, _ = Get[testAttrs](context.Background(), c, "/v1/things/1")
+
+	// Assert
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("requests = %d, want 1 (option must override Config.MaxRetries)", got)
+	}
+}
+
+func TestConfigNegativeMaxRetriesSendsOnceAndReturnsError(t *testing.T) {
+	// Arrange
+	tok := startTokenServer(t, nil)
+	var calls atomic.Int32
+	api := countingServer(t, &calls, alwaysRateLimited)
+	c := newTestClientConfig(t, Config{MaxRetries: -1}, api.URL, tok.URL)
+
+	// Act
+	_, err := Get[testAttrs](context.Background(), c, "/v1/things/1")
+
+	// Assert
+	if err == nil || calls.Load() != 1 {
+		t.Fatalf("err = %v, requests = %d; want the 429 after exactly 1 request", err, calls.Load())
+	}
+}
+
+func TestConfigZeroMaxRetriesKeepsDefaultRetries(t *testing.T) {
+	// Arrange
+	tok := startTokenServer(t, nil)
+	var calls atomic.Int32
+	api := countingServer(t, &calls, func(w http.ResponseWriter, _ *http.Request) {
+		if calls.Load() == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		writeJSONResp(t, w, http.StatusOK, SingleResponse[testAttrs]{
+			Data: ResourceObject[testAttrs]{Type: "thing", ID: "1", Attributes: testAttrs{Name: "ok"}},
+		})
+	})
+	c := newTestClientConfig(t, Config{MaxRetries: 0}, api.URL, tok.URL)
+
+	// Act
+	_, err := Get[testAttrs](context.Background(), c, "/v1/things/1")
+
+	// Assert
+	if err != nil || calls.Load() != 2 {
+		t.Fatalf("err = %v, requests = %d; want success on the default retry", err, calls.Load())
+	}
+}
+
+func TestRateLimitedErrorKeepsJSONAPIBody(t *testing.T) {
+	// Arrange
+	tok := startTokenServer(t, nil)
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSONResp(t, w, http.StatusTooManyRequests, map[string]any{
+			"errors": []map[string]any{{"status": "429", "code": "RATE_LIMIT", "title": "t", "detail": "slow down"}},
+		})
+	}))
+	t.Cleanup(api.Close)
+	c := newTestClient(t, api.URL, tok.URL, WithMaxRetries(0))
+
+	// Act
+	_, err := Get[testAttrs](context.Background(), c, "/v1/things/1")
+
+	// Assert
+	var ae *APIError
+	if !errors.As(err, &ae) || len(ae.Errors) == 0 || ae.Errors[0].Code != "RATE_LIMIT" {
+		t.Fatalf("err = %#v, want decoded JSON:API errors on the 429", err)
+	}
+}
+
+func TestServerErrorExhaustedKeepsRawBody(t *testing.T) {
+	// Arrange
+	tok := startTokenServer(t, nil)
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte("<html>maintenance</html>"))
+	}))
+	t.Cleanup(api.Close)
+	c := newTestClient(t, api.URL, tok.URL, WithMaxRetries(0))
+
+	// Act
+	_, err := Get[testAttrs](context.Background(), c, "/v1/things/1")
+
+	// Assert
+	var ae *APIError
+	if !errors.As(err, &ae) || !strings.Contains(ae.RawBody, "maintenance") {
+		t.Fatalf("err = %#v, want the 503 body snippet in RawBody", err)
+	}
+}
+
+// fetchAPIError は h を返すサーバへリトライなしで GET し、得られた *APIError を返す。
+func fetchAPIError(t *testing.T, h http.HandlerFunc) *APIError {
+	t.Helper()
+	tok := startTokenServer(t, nil)
+	api := httptest.NewServer(h)
+	t.Cleanup(api.Close)
+	c := newTestClient(t, api.URL, tok.URL, WithMaxRetries(0))
+	_, err := Get[testAttrs](context.Background(), c, "/v1/things/1")
+	var ae *APIError
+	if !errors.As(err, &ae) {
+		t.Fatalf("err = %v, want *APIError", err)
+	}
+	return ae
+}
+
+func rateLimitedWithHeader(key, value string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set(key, value)
+		w.WriteHeader(http.StatusTooManyRequests)
+	}
+}
+
+func TestAPIErrorRetryAfterDelaySeconds(t *testing.T) {
+	// Arrange / Act
+	ae := fetchAPIError(t, rateLimitedWithHeader("Retry-After", "120"))
+
+	// Assert
+	if ae.RetryAfter != 120*time.Second {
+		t.Fatalf("RetryAfter = %v, want 2m0s", ae.RetryAfter)
+	}
+}
+
+func TestAPIErrorRetryAfterHTTPDate(t *testing.T) {
+	// Arrange
+	retryAt := time.Now().Add(90 * time.Second).UTC().Format(http.TimeFormat)
+
+	// Act
+	ae := fetchAPIError(t, rateLimitedWithHeader("Retry-After", retryAt))
+
+	// Assert: HTTP-date は秒単位に丸められるため幅を持たせる
+	if ae.RetryAfter < 80*time.Second || ae.RetryAfter > 90*time.Second {
+		t.Fatalf("RetryAfter = %v, want about 90s", ae.RetryAfter)
+	}
+}
+
+func TestAPIErrorRetryAfterAbsentIsZero(t *testing.T) {
+	// Arrange / Act
+	ae := fetchAPIError(t, alwaysRateLimited)
+
+	// Assert
+	if ae.RetryAfter != 0 {
+		t.Fatalf("RetryAfter = %v, want 0 when the header is absent", ae.RetryAfter)
+	}
+}
+
+func TestAPIErrorKeepsResponseHeader(t *testing.T) {
+	// Arrange / Act
+	ae := fetchAPIError(t, rateLimitedWithHeader("X-Request-Id", "req-123"))
+
+	// Assert
+	if got := ae.Header.Get("X-Request-Id"); got != "req-123" {
+		t.Fatalf("Header X-Request-Id = %q, want %q", got, "req-123")
+	}
+}
+
+func TestParseRetryAfter(t *testing.T) {
+	now := time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name string
+		in   string
+		want time.Duration
+	}{
+		{"empty is unspecified", "", 0},
+		{"delay seconds", "5", 5 * time.Second},
+		{"surrounding spaces are ignored", " 7 ", 7 * time.Second},
+		{"zero is unspecified", "0", 0},
+		{"negative is unspecified", "-5", 0},
+		{"unparsable is unspecified", "soon", 0},
+		{"overflowing seconds are unspecified", "99999999999999999", 0},
+		{"future HTTP-date", now.Add(30 * time.Second).Format(http.TimeFormat), 30 * time.Second},
+		{"past HTTP-date is unspecified", now.Add(-30 * time.Second).Format(http.TimeFormat), 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Act
+			got := parseRetryAfter(tt.in, now)
+
+			// Assert
+			if got != tt.want {
+				t.Fatalf("parseRetryAfter(%q) = %v, want %v", tt.in, got, tt.want)
+			}
+		})
 	}
 }
