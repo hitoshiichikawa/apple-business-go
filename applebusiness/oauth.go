@@ -3,6 +3,7 @@ package applebusiness
 import (
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -62,44 +63,106 @@ func (c Credentials) issuer() string {
 	return c.ClientID
 }
 
-type tokenSource struct {
-	creds    Credentials
+// complete reports whether the fields required to mint a token are set.
+func (c Credentials) complete() bool {
+	return c.ClientID != "" && c.KeyID != "" && len(c.PrivateKey) > 0
+}
+
+// NewTokenSource returns an oauth2.TokenSource that issues access tokens for the
+// Credentials returned by fn and reuses each token until shortly before it
+// expires. Use it to share one token per credential across Clients without
+// keeping the private key in memory.
+//
+// fn is called only when a new token is needed: on the first Token call and then
+// about once an hour (tokens are valid for one hour). The Credentials it returns,
+// including the private key, are used for that single token request and are not
+// kept by the source, so the key can stay encrypted at rest and be decrypted
+// inside fn just for that call. A different KeyID / PrivateKey returned by a
+// later call (key rotation) takes effect on the next refresh.
+//
+// Create one source per credential (e.g. per tenant), cache it, and pass it to
+// every Client for that credential with WithTokenSource. The source is safe for
+// concurrent use; callers that need a refresh at the same time wait for a single
+// token request.
+//
+// oauth2.TokenSource.Token takes no context, so fn cannot receive one: apply
+// your own timeout inside fn if it calls an external service such as a KMS. The
+// token request itself uses the HTTP client's timeout (30 seconds by default).
+//
+// Only WithTokenURL and WithHTTPClient apply; all other options are ignored.
+//
+// Token returns an error, without calling the token endpoint, when fn is nil,
+// when fn fails (the error is wrapped, so errors.Is / errors.As work), or when
+// client_id, key_id or private_key is missing. When the token endpoint rejects
+// the request, the error is a *TokenError.
+func NewTokenSource(fn func() (Credentials, error), opts ...Option) oauth2.TokenSource {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return newCredentialsTokenSource(fn, o.httpClient, o.tokenURL)
+}
+
+// errNilCredentialsFunc は NewTokenSource に nil の fn が渡されたときに Token が返すエラー。
+var errNilCredentialsFunc = errors.New("applebusiness oauth: NewTokenSource: credentials func is nil")
+
+// credentialsTokenSource は Token のたびに fn から Credentials を取得してトークンを発行する。
+// 秘密鍵を持ち続けないよう、Credentials はフィールドに保持しない（#38）。トークンのキャッシュと
+// 同時更新の集約は、包んでいる oauth2.ReuseTokenSource が担う。
+type credentialsTokenSource struct {
+	fn       func() (Credentials, error)
 	client   *http.Client
 	tokenURL string
 }
 
-func newTokenSource(creds Credentials, hc *http.Client, endpoint string) oauth2.TokenSource {
+func newCredentialsTokenSource(fn func() (Credentials, error), hc *http.Client, endpoint string) oauth2.TokenSource {
 	if hc == nil {
 		hc = &http.Client{Timeout: 30 * time.Second}
 	}
 	if endpoint == "" {
 		endpoint = tokenURL
 	}
-	return oauth2.ReuseTokenSource(nil, &tokenSource{creds: creds, client: hc, tokenURL: endpoint})
+	return oauth2.ReuseTokenSource(nil, &credentialsTokenSource{fn: fn, client: hc, tokenURL: endpoint})
 }
 
-func (s *tokenSource) Token() (*oauth2.Token, error) {
-	assertion, err := buildClientAssertion(s.creds)
+func (s *credentialsTokenSource) Token() (*oauth2.Token, error) {
+	if s.fn == nil {
+		return nil, errNilCredentialsFunc
+	}
+	creds, err := s.fn()
+	if err != nil {
+		return nil, fmt.Errorf("applebusiness oauth: get credentials: %w", err)
+	}
+	if !creds.complete() {
+		return nil, errors.New("applebusiness oauth: client_id, key_id and private_key are required")
+	}
+	return requestToken(s.client, s.tokenURL, creds)
+}
+
+// requestToken は creds からクライアントアサーションを作り、トークン端点で交換する。
+// creds（秘密鍵を含む）はこの呼び出しの中でだけ使い、どこにも保持しない。
+func requestToken(hc *http.Client, endpoint string, creds Credentials) (*oauth2.Token, error) {
+	assertion, err := buildClientAssertion(creds)
 	if err != nil {
 		return nil, err
 	}
 
 	form := url.Values{
 		"grant_type":            {"client_credentials"},
-		"client_id":             {s.creds.ClientID},
+		"client_id":             {creds.ClientID},
 		"client_assertion_type": {"urn:ietf:params:oauth:client-assertion-type:jwt-bearer"},
 		"client_assertion":      {assertion},
-		"scope":                 {s.creds.scope()},
+		"scope":                 {creds.scope()},
 	}
 
-	req, err := http.NewRequest(http.MethodPost, s.tokenURL, strings.NewReader(form.Encode()))
+	req, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	// bodyclose はヘルパ（drainAndClose）経由のクローズを追跡できないが、直後の defer でクローズしている。
-	resp, err := s.client.Do(req) //nolint:bodyclose
+	resp, err := hc.Do(req) //nolint:bodyclose
 	if err != nil {
 		return nil, fmt.Errorf("applebusiness oauth: token request: %w", err)
 	}

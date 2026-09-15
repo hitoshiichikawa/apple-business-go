@@ -14,6 +14,7 @@
 - 429 / 5xx でリトライを使い切った場合（またはリトライ無効の場合）も、最後の応答の本文を `APIError.Errors` / `APIError.RawBody` に保持する（#35）。従来はステータスコードのみで、本文は破棄されていた。
 - `examples/write-test` に `-replace-empty` を追加。テスト用 Blueprint で空集合の `Replace` を実機で試し、作成時の「中身（apps/packages/configurations）と割り当て先（orgDevices/users/userGroups）が各 1 件以上」という制約（409 `MISSING_RESOURCES` / `MISSING_MEMBERS`）が関連の更新時にもかかるかを確認できる（#36）。
 - `applebusiness.TokenError`: トークンエンドポイントが 200 以外を返したときのエラー型（`StatusCode` / `Code`（OAuth の `error`）/ `Description`（`error_description`）/ `RawBody` / `Header` / `RetryAfter`）（#37）。API 呼び出しからは `*url.Error` に包まれて返るため `errors.As` で取り出す。`Client.AccessToken` はそのまま返す。`Error()` の文字列は従来と同じ形式（`applebusiness oauth: token failed (429): invalid_request ...`）。
+- `applebusiness.NewTokenSource`: 認証情報ごとにアクセストークンを使い回すためのトークンソース（#38）。`Credentials` を返す関数を受け取り、その関数はトークンの更新時（初回と、以降は約 1 時間に 1 回）だけ呼ばれる。返された `Credentials`（秘密鍵を含む）はそのトークン発行にだけ使い、保持しないため、鍵を暗号化したまま保管して更新時だけ復号できる。認証情報ごとに 1 つ作ってキャッシュし、`WithTokenSource` で各 `Client` に渡す。同時に更新が必要になっても発行は 1 回にまとまる。効くオプションは `WithTokenURL` / `WithHTTPClient` のみ。`Config.Credentials` から作る `NewClient` の既定のトークン発行も、内部で同じ実装を使うように整理（挙動の変更なし）。
 
 ### Fixed
 - `Config.MaxRetries` が負の値のとき、`Client.Do` がリクエストを 1 回も送らずに `nil` エラーを返していた（`Get` 等がゼロ値のリソースを成功として返していた）不具合を修正（#35）。負の値はリトライ無効（1 回だけ送信）として扱う。0（ゼロ値）は従来どおり既定の 4 回。
