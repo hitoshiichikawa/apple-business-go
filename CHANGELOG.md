@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-15
+
 ### Changed
 - `docs/apple-business-api-reference.md` を実機結果で更新（#44）。実 AB は Blueprint の全関連への `REPLACE`（PATCH）を拒否することを確認（`apps` / `configurations` / `packages` / `orgDevices` で 403 `FORBIDDEN_ERROR`、demo 2026-09-15。空集合でも同じ）。#36 で記載した「空集合 → 409 MISSING_RESOURCES」は誤りのため訂正した。あわせて記述の出所を ✅実機 / 📄DocC / ❓推測 で区別するプロヴェナンス表記を導入。
 
