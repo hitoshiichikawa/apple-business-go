@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -228,19 +229,30 @@ func TestBlueprintRelationships(t *testing.T) {
 		}
 	})
 
-	t.Run("Replace(apps,[]) → 403 FORBIDDEN", func(t *testing.T) {
-		assertForbiddenReplace(t, bp.Replace(ctxFor(t), created.ID, blueprints.RelApps, []string{}))
+	// REPLACE(PATCH) is verified with a low-level raw request: the SDK no longer
+	// exposes blueprints.Replace (removed in v0.11.0, #44 — Apple rejects REPLACE
+	// on every Blueprint relationship). This keeps the 403 contract under test so
+	// a future Apple change is caught.
+	t.Run("PATCH apps [] → 403 FORBIDDEN", func(t *testing.T) {
+		assertForbiddenReplace(t, rawReplace(t, c, created.ID, blueprints.RelApps))
 	})
-	t.Run("Replace(configurations,[]) → 403 FORBIDDEN", func(t *testing.T) {
-		assertForbiddenReplace(t, bp.Replace(ctxFor(t), created.ID, blueprints.RelConfigurations, []string{}))
+	t.Run("PATCH configurations [] → 403 FORBIDDEN", func(t *testing.T) {
+		assertForbiddenReplace(t, rawReplace(t, c, created.ID, blueprints.RelConfigurations))
 	})
-	// Member relationships are unconfirmed: record, do not assert.
-	t.Run("Replace(orgDevices,[]) → record", func(t *testing.T) {
-		logResult(t, "Replace(orgDevices, [])", bp.Replace(ctxFor(t), created.ID, blueprints.RelOrgDevices, []string{}))
+	t.Run("PATCH orgDevices [] → record", func(t *testing.T) {
+		logResult(t, "raw PATCH orgDevices []", rawReplace(t, c, created.ID, blueprints.RelOrgDevices))
 	})
-	t.Run("Replace(packages,[]) → record", func(t *testing.T) {
-		logResult(t, "Replace(packages, [])", bp.Replace(ctxFor(t), created.ID, blueprints.RelPackages, []string{}))
+	t.Run("PATCH packages [] → record", func(t *testing.T) {
+		logResult(t, "raw PATCH packages []", rawReplace(t, c, created.ID, blueprints.RelPackages))
 	})
+}
+
+// rawReplace sends a raw PATCH {"data":[]} to a Blueprint relationship via the
+// low-level client, since the SDK no longer exposes Replace (#44).
+func rawReplace(t *testing.T, c *applebusiness.Client, bpID, rel string) error {
+	t.Helper()
+	u := c.BaseURL() + "/v1/blueprints/" + url.PathEscape(bpID) + "/relationships/" + rel
+	return c.Do(ctxFor(t), http.MethodPatch, u, []byte(`{"data":[]}`), nil)
 }
 
 // ---------------------------------------------------------------------------

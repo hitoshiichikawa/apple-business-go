@@ -341,9 +341,10 @@ Configurations はセキュリティ/ネットワーク等の設定単位、Blue
 - ✅ **実機（demo, 2026-09-15）: Blueprint 関連への `REPLACE`（PATCH）は許可されない。** `apps` / `configurations` /
   `packages` / `orgDevices` の 4 種で 403 `FORBIDDEN_ERROR`「The relationship '<rel>' does not allow 'REPLACE'. Allowed
   operations are: CREATE, DELETE, GET_RELATIONSHIP」を確認（空配列 `{"data":[]}` でも同じ）。`users` / `userGroups` は
-  直接は未実行だが、同じメンバー系の `orgDevices` が 403 のため同様とみなす（❓）。SDK の `blueprints.Replace` は PATCH を
-  送るため 403 になる（`applebusiness.IsForbidden` で判定）。集合を変えるには `AddTo`（POST）/ `RemoveFrom`（DELETE）を使う。
-  検証は `livetest`（`go test -tags livetest ./livetest`）。詳細は [#44](https://github.com/hitoshiichikawa/apple-business-go/issues/44)。
+  直接は未実行だが、同じメンバー系の `orgDevices` が 403 のため同様とみなす（❓）。このため SDK は関連操作に `AddTo`（POST）/
+  `RemoveFrom`（DELETE）のみを提供し、REPLACE は提供しない（`blueprints.Replace` は v0.11.0 で削除、#44）。集合を変えるには
+  現在値を差分して `AddTo` / `RemoveFrom` を適用する。403 の契約は `livetest`（`go test -tags livetest ./livetest`）が生の
+  PATCH で継続検証する。詳細は [#44](https://github.com/hitoshiichikawa/apple-business-go/issues/44)。
 
 ### 7.3 Configuration — 読み取り / 操作系（確定）
 
@@ -387,7 +388,7 @@ Configurations はセキュリティ/ネットワーク等の設定単位、Blue
 |---|---|
 | `blueprints.List` / `Get` / `Relationship(rel)` | 読み取り |
 | `blueprints.Create` / `Update` / `Delete` | 操作系 |
-| `blueprints.AddTo(rel, ids)` / `RemoveFrom(rel, ids)` / `Replace(rel, ids)` | 割り当て |
+| `blueprints.AddTo(rel, ids)` / `RemoveFrom(rel, ids)` | 割り当て（REPLACE は実機非対応のため未提供。#44） |
 | `configurations.List` / `Get` / `Create` / `Update` / `Delete` | 構成 |
 
 ---
