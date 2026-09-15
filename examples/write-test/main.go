@@ -19,12 +19,7 @@
 //	go run ./examples/write-test                  # ドライラン（実行計画の表示のみ）
 //	go run ./examples/write-test -yes             # Blueprint/Configuration の作成→更新→削除を実行
 //	go run ./examples/write-test -yes -app <id>   # 併せて Blueprint の apps リレーション付替も試す
-//	go run ./examples/write-test -yes -replace-empty [-app <id>]  # Blueprint 関連への Replace(PATCH) を観測する
 //	go run ./examples/write-test -yes -assign-server <mdmId> -assign-device <serial>  # 割り当ても試す（復元あり）
-//
-// -replace-empty は、テスト用 Blueprint で関連（apps / configurations）への Replace(PATCH) を試す。
-// 実機は Blueprint 関連への REPLACE を許可しない（403 FORBIDDEN_ERROR、#44）ことを、結果と想定を並べて確認する。
-// 観測が目的のため、その結果は成功／失敗の集計に含めない。
 package main
 
 import (
@@ -34,7 +29,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
-	"errors"
 	"flag"
 	"fmt"
 	"math/big"
@@ -53,7 +47,6 @@ func main() {
 	yes := flag.Bool("yes", false, "実際に書き込みを実行する（未指定はドライラン＝無変更）")
 	keep := flag.Bool("keep", false, "作成したテスト用リソースを削除せず残す")
 	appID := flag.String("app", "", "Blueprint の apps リレーション付替テストに使う app ID（任意）")
-	replaceEmpty := flag.Bool("replace-empty", false, "テスト用 Blueprint で関連への Replace(PATCH) を試す（実機は 403 で拒否する。#44）")
 	assignServer := flag.String("assign-server", "", "割り当てテスト対象の MDM サーバ ID（-assign-device と併用で実行）")
 	assignDevice := flag.String("assign-device", "", "割り当てテスト対象のデバイス ID(serial)")
 	timeout := flag.Duration("timeout", 10*time.Minute, "全体タイムアウト")
@@ -91,7 +84,7 @@ func main() {
 	fmt.Printf("✓ token acquired: %s… (expires %s)\n\n", mask(tok), exp.Format(time.RFC3339))
 
 	if !*yes {
-		printPlan(*appID, *assignServer, *assignDevice, *keep, *replaceEmpty)
+		printPlan(*appID, *assignServer, *assignDevice, *keep)
 		return
 	}
 
@@ -154,10 +147,6 @@ func main() {
 			if *appID != "" {
 				report("blueprints.AddTo(apps)", bpSvc.AddTo(ctx, bp.ID, blueprints.RelApps, []string{*appID}))
 				report("blueprints.RemoveFrom(apps)", bpSvc.RemoveFrom(ctx, bp.ID, blueprints.RelApps, []string{*appID}))
-			}
-
-			if *replaceEmpty {
-				runReplaceEmpty(ctx, bpSvc, bp.ID, *appID, report)
 			}
 
 			if *keep {
@@ -274,50 +263,11 @@ func pollPrint(ctx context.Context, svc *devices.Service, activityID string) {
 	fmt.Printf("  activity %s: status=%s subStatus=%s\n", activityID, final.Attributes.Status, final.Attributes.SubStatus)
 }
 
-// runReplaceEmpty はテスト用 Blueprint の関連への Replace(PATCH) を実機で試し、結果を想定と並べて表示する（#36 / #44）。
-// 実機は Blueprint 関連への REPLACE を許可しない（403 FORBIDDEN_ERROR、apps / configurations で確認）ことの確認が目的で、
-// 空集合でも非空でも同じ 403 になる。観測が目的なので Replace の結果は成功／失敗の集計に含めない（準備の AddTo だけ report で数える）。
-// どの結果でも、この後の削除による後始末はそのまま動く。
-func runReplaceEmpty(ctx context.Context, svc *blueprints.Service, bpID, appID string, report func(string, error)) {
-	fmt.Println("  -- Blueprint 関連への Replace（-replace-empty, #36 / #44）--")
-	if appID == "" {
-		fmt.Println("  （-app 未指定のため apps の空置換はスキップ）")
-	} else {
-		aerr := svc.AddTo(ctx, bpID, blueprints.RelApps, []string{appID})
-		report("blueprints.AddTo(apps)（replace-empty の準備）", aerr)
-		if aerr == nil {
-			observe("blueprints.Replace(apps, [])",
-				"403 FORBIDDEN_ERROR（apps は REPLACE 非対応。空集合でも同じ）",
-				svc.Replace(ctx, bpID, blueprints.RelApps, []string{}))
-		}
-	}
-	observe("blueprints.Replace(configurations, [])",
-		"403 FORBIDDEN_ERROR（configurations は REPLACE 非対応。空集合でも同じ）",
-		svc.Replace(ctx, bpID, blueprints.RelConfigurations, []string{}))
-}
-
-// observe は観測結果を「想定」と並べて表示する。APIError なら status / code / detail を出す。
-func observe(label, want string, err error) {
-	fmt.Printf("  ▶ %s\n    想定: %s\n", label, want)
-	var ae *applebusiness.APIError
-	switch {
-	case err == nil:
-		fmt.Println("    結果: 成功（エラーなし）")
-	case errors.As(err, &ae) && len(ae.Errors) > 0:
-		e := ae.Errors[0]
-		fmt.Printf("    結果: APIError status=%d code=%s title=%q detail=%q\n", ae.StatusCode, e.Code, e.Title, e.Detail)
-	case errors.As(err, &ae):
-		fmt.Printf("    結果: APIError status=%d body=%q\n", ae.StatusCode, ae.RawBody)
-	default:
-		fmt.Printf("    結果: エラー %v\n", err)
-	}
-}
-
-func printPlan(appID, assignServer, assignDevice string, keep, replaceEmpty bool) {
+func printPlan(appID, assignServer, assignDevice string, keep bool) {
 	fmt.Println("=== DRY RUN（無変更）===")
 	fmt.Println("-yes を付けると以下を実行します:")
 	fmt.Println("  Configurations: Create(CUSTOM_SETTING) → Update" + delNote(keep))
-	fmt.Println("  Blueprints:     中身=上記Configuration＋割り当て先(userGroups/users)1件を一時付与（一瞬配信） → Create → Update" + relNote(appID) + replaceEmptyNote(replaceEmpty, appID) + delNote(keep))
+	fmt.Println("  Blueprints:     中身=上記Configuration＋割り当て先(userGroups/users)1件を一時付与（一瞬配信） → Create → Update" + relNote(appID) + delNote(keep))
 	fmt.Println("  MdmServers:     Create(自己署名証明書・デバイス割り当てなし) → Get → Update(名前+defaultProductFamilies)" + delNote(keep))
 	if assignServer != "" && assignDevice != "" {
 		fmt.Printf("  Devices:        Assign(%s→%s) → 復元(元へ戻す/解除)\n", assignDevice, assignServer)
@@ -332,17 +282,6 @@ func relNote(appID string) string {
 		return " → AddTo(apps) → RemoveFrom(apps)"
 	}
 	return ""
-}
-
-func replaceEmptyNote(on bool, appID string) string {
-	switch {
-	case !on:
-		return ""
-	case appID != "":
-		return " → [replace-empty] AddTo(apps) → Replace(apps, []) → Replace(configurations, [])（結果を観測）"
-	default:
-		return " → [replace-empty] Replace(configurations, [])（結果を観測）"
-	}
 }
 
 func delNote(keep bool) string {

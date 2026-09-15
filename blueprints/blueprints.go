@@ -148,32 +148,19 @@ func (s *Service) RemoveFrom(ctx context.Context, id, rel string, ids []string) 
 	return s.modifyRel(ctx, http.MethodDelete, id, rel, ids)
 }
 
-// Replace replaces the set of members in a relationship (PATCH). An empty (or
-// nil) ids sends {"data":[]}.
-//
-// Apple rejects PATCH/REPLACE on Blueprint relationships: apps, configurations,
-// packages and orgDevices were confirmed on a real tenant (demo, 2026-09-15) to
-// return 403 FORBIDDEN_ERROR ("The relationship '<rel>' does not allow
-// 'REPLACE'. Allowed operations are: CREATE, DELETE, GET_RELATIONSHIP"), whether
-// ids is empty or not; users and userGroups were not tested directly but the
-// member relationship orgDevices behaves the same, so expect 403 there too. To
-// change a relationship, read the current set with Relationship and apply the
-// difference with AddTo (POST) and RemoveFrom (DELETE). Detect the rejection
-// with applebusiness.IsForbidden. See issue #44 for the plan for this method.
-func (s *Service) Replace(ctx context.Context, id, rel string, ids []string) error {
-	return s.modifyRel(ctx, http.MethodPatch, id, rel, ids)
-}
+// REPLACE(PATCH) は提供しない。実 AB は Blueprint の全関連への REPLACE を
+// 403 FORBIDDEN_ERROR で拒否する（apps / configurations / packages / orgDevices
+// で確認。#44）。関連の集合を変えるには AddTo（POST）/ RemoveFrom（DELETE）で
+// 差分を適用する。
 
 func (s *Service) modifyRel(ctx context.Context, method, id, rel string, ids []string) error {
 	if err := checkRel(rel); err != nil {
 		return err
 	}
-	// 追加・削除の空集合は「何もしない」と等価なので送らない。置換（PATCH）の
-	// 空集合は「関連を空にする」意味を持つため、そのまま送る（#36）。
-	if len(ids) == 0 && method != http.MethodPatch {
+	// 空集合は「何もしない」と等価なので送らない（AddTo / RemoveFrom のみ）。
+	if len(ids) == 0 {
 		return nil
 	}
-	// 長さ 0 でも非 nil のスライスにする（nil だと {"data":null} になる）。
 	items := make([]applebusiness.Data, len(ids))
 	for i, x := range ids {
 		items[i] = applebusiness.Data{Type: rel, ID: x} // rel名 == type

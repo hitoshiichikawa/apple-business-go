@@ -267,7 +267,7 @@ if applebusiness.IsRateLimited(err) && errors.As(err, &apiErr) {
 | `people` | `ListUsers` / `GetUser` | `/v1/users`, `/v1/users/{id}` |
 | `people` | `ListUserGroups` / `GetUserGroup` / `GroupMembers` | `/v1/userGroups(/{id})(/relationships/users)` |
 | `orgunits` | `List` / `Get` / `Members` | `/v1/organizationalUnits(/{id})(/relationships/users)` (API 2.2+) |
-| `blueprints` | `List` / `Get` / `Create` / `Update` / `Delete` / `AddTo` / `RemoveFrom` / `Replace` / `RelationshipIDs` | `/v1/blueprints(/{id})(/relationships/{rel})` |
+| `blueprints` | `List` / `Get` / `Create` / `Update` / `Delete` / `AddTo` / `RemoveFrom` / `RelationshipIDs` | `/v1/blueprints(/{id})(/relationships/{rel})` |
 | `configurations` | `List` / `Get` / `Create` / `Update` / `Delete` | `/v1/configurations(/{id})` |
 | `apps` | `ListApps` / `GetApp` / `ListPackages` / `GetPackage` | `/v1/apps(/{id})`, `/v1/packages(/{id})` |
 | `auditevents` | `List` / `ListRange` | `/v1/auditEvents` (requires `filter[startTimestamp]`) |
