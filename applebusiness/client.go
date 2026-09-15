@@ -77,8 +77,9 @@ func sameOrigin(u, origin *url.URL) bool {
 // By default the token source is built from Config.Credentials (client_id,
 // key_id and private_key are required). Alternatively, inject a caller-managed
 // token source with WithTokenSource; in that case Credentials are optional and
-// the injected source is used as-is (see WithTokenSource for why this matters
-// for token reuse and private-key residency).
+// the injected source is used as-is. To share one token per credential across
+// Clients without keeping the private key in memory, build that source with
+// NewTokenSource.
 //
 // In addition to the Config values, settings can be overridden with Options
 // (WithBaseURL / WithTokenURL / WithMaxRetries / WithUserAgent / WithHTTPClient /
@@ -104,10 +105,12 @@ func NewClient(cfg Config, opts ...Option) (*Client, error) {
 	// are then required.
 	ts := o.tokenSource
 	if ts == nil {
-		if cfg.Credentials.ClientID == "" || cfg.Credentials.KeyID == "" || len(cfg.Credentials.PrivateKey) == 0 {
+		if !cfg.Credentials.complete() {
 			return nil, errors.New("applebusiness: client_id, key_id and private_key are required (or inject a token source with WithTokenSource)")
 		}
-		ts = newTokenSource(cfg.Credentials, o.httpClient, o.tokenURL)
+		// NewTokenSource と同じ実装でトークンを発行する（Config で渡された認証情報をそのまま返す）。
+		creds := cfg.Credentials
+		ts = newCredentialsTokenSource(func() (Credentials, error) { return creds, nil }, o.httpClient, o.tokenURL)
 	}
 
 	if o.baseURL == "" {

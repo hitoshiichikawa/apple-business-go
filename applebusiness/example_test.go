@@ -26,6 +26,37 @@ func ExampleNewClient() {
 	_ = c
 }
 
+// Reuse access tokens per credential without keeping the private key in memory.
+// fn runs only when a new token is needed (about once an hour), so the key can
+// stay encrypted at rest and be decrypted just for that call.
+func ExampleNewTokenSource() {
+	decryptPrivateKey := func() ([]byte, error) {
+		return os.ReadFile("abm_private_key.pem") // in practice, decrypt with your KMS / envelope key
+	}
+
+	// Create one source per credential (e.g. per tenant), cache it, and share it across Clients.
+	ts := applebusiness.NewTokenSource(func() (applebusiness.Credentials, error) {
+		pem, err := decryptPrivateKey()
+		if err != nil {
+			return applebusiness.Credentials{}, err
+		}
+		return applebusiness.Credentials{
+			ClientID:   "BUSINESSAPI.xxxxxxxx",
+			KeyID:      "xxxxxxxx",
+			PrivateKey: pem,
+		}, nil
+	})
+
+	c, err := applebusiness.NewClient(
+		applebusiness.Config{BaseURL: applebusiness.DefaultBusinessBaseURL},
+		applebusiness.WithTokenSource(ts),
+	)
+	if err != nil {
+		return
+	}
+	_ = c
+}
+
 // Lazy paging with ListSeq (without loading everything into memory).
 func ExampleListSeq() {
 	var c *applebusiness.Client // in practice, create this with NewClient

@@ -78,7 +78,9 @@ func WithHTTPClient(hc *http.Client) Option {
 // caller wants). This decouples the OAuth token lifecycle from the *Client
 // lifetime: a long-lived, shared token source can be reused across short-lived
 // Clients so the token endpoint is not hit on every request, and the caller can
-// control private-key residency (e.g. decrypt the key only on token refresh).
+// control private-key residency. NewTokenSource builds such a source: it calls
+// your function for Credentials only when a token is refreshed (about once an
+// hour) and does not keep them, so the key need not stay in memory.
 //
 // If both Config.Credentials and WithTokenSource are supplied, the injected
 // token source wins and Credentials are ignored for authentication.

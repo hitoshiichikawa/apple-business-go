@@ -170,15 +170,43 @@ The `scope` is `business.api` / `school.api`. Access tokens are valid for one ho
 > - **Long-lived processes: create the `Client` once and share it** (simplest and safest).
 > - With multiple credentials, **cache one `Client` per credential** and reuse it.
 > - If you must avoid keeping the decrypted private key resident in memory, do not cache the
->   whole `Client`; instead **cache only the access token and decrypt the key solely on token
->   refresh** (≈ once per hour) via a custom `oauth2.TokenSource` injected with
->   [`WithTokenSource`](#authentication) (it makes `Credentials` optional and replaces the
->   built-in source).
-> - When multiple requests can miss the cache concurrently, **serialize token issuance with
->   single-flight** so you do not fan out simultaneous token requests.
+>   whole `Client`; instead **cache one `applebusiness.NewTokenSource` per credential** and pass
+>   it to every `Client` with `WithTokenSource` (see below).
 
-To bring your own token lifecycle, inject an `oauth2.TokenSource` with `WithTokenSource`. When
-provided, `Credentials` are optional and the SDK uses your source as-is:
+### Reusing tokens without keeping the private key
+
+`NewTokenSource` builds a token source from a function that returns `Credentials`. The function
+is called only when a new access token is needed (the first call, then ≈ once per hour), and the
+`Credentials` it returns — including the private key — are used for that token request and not
+kept, so the key can stay encrypted at rest and be decrypted just for that call. Tokens are reused
+until shortly before they expire, and concurrent refreshes collapse into a single token request.
+
+```go
+// Create once per credential (e.g. per tenant), cache it, and share it across Clients.
+ts := applebusiness.NewTokenSource(func() (applebusiness.Credentials, error) {
+    pem, err := decryptPrivateKey() // runs only on refresh
+    if err != nil {
+        return applebusiness.Credentials{}, err
+    }
+    return applebusiness.Credentials{ClientID: clientID, KeyID: keyID, PrivateKey: pem}, nil
+})
+
+c, err := applebusiness.NewClient(
+    applebusiness.Config{BaseURL: applebusiness.DefaultBusinessBaseURL},
+    applebusiness.WithTokenSource(ts),
+)
+```
+
+- A different `KeyID` / `PrivateKey` returned on a later call (key rotation) is used from the next refresh.
+- `oauth2.TokenSource.Token` has no context, so the function cannot receive one: put your own timeout
+  inside it if it calls a KMS or another service. The token request uses the HTTP client's timeout.
+- Only `WithTokenURL` and `WithHTTPClient` apply to `NewTokenSource`; other options are ignored.
+- `Token` returns an error without calling the token endpoint when the function is nil, fails
+  (wrapped, so `errors.Is` works) or returns incomplete credentials; a rejection by the token
+  endpoint is a `*TokenError`.
+
+To bring your own token lifecycle entirely, inject any `oauth2.TokenSource` with `WithTokenSource`.
+When provided, `Credentials` are optional and the SDK uses your source as-is:
 
 ```go
 c, err := applebusiness.NewClient(
@@ -258,6 +286,7 @@ endpoint details are in [`docs/apple-business-api-reference.md`](./docs/apple-bu
 - [x] `blueprints` / `configurations` (built-in device management): implemented (CRUD + assignment); spec confirmed and write paths verified against the live API
 - [x] All resource `Attributes`, enum values, and the audit model confirmed against the official DocC ([`docs/apple-business-api-datatypes.md`](./docs/apple-business-api-datatypes.md))
 - [x] Functional options (`WithBaseURL`/`WithTokenURL`/`WithMaxRetries`/`WithUserAgent`/`WithHTTPClient`/`WithTokenSource`)
+- [x] `NewTokenSource`: share one access token per credential across Clients without keeping the private key in memory (see [Reusing tokens without keeping the private key](#reusing-tokens-without-keeping-the-private-key))
 - [x] Typed error predicates (`IsNotFound`/`IsRateLimited`/`IsUnauthorized`/`IsForbidden`/`IsConflict`)
 - [x] `ListSeq` (lazy paging via Go 1.23 range-over-func)
 - [x] Unit tests (`httptest`) for all packages / CHANGELOG / golangci-lint / CI (gofmt, vet, build, test -race, lint)
