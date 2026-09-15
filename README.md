@@ -157,10 +157,14 @@ The `scope` is `business.api` / `school.api`. Access tokens are valid for one ho
 > `POST https://account.apple.com/auth/oauth2/token` starts returning
 > **`429 invalid_request "Too many requests"`**, which then makes the API call itself fail.
 >
-> Note that this failure surfaces as a `*url.Error`
-> (`Get ".../v1/...": applebusiness oauth: token failed (429): ...`) and is **not** an
-> `*applebusiness.APIError` — `errors.As(err, &apiErr)` will not match it, so it is reported
-> as a transport / unreachable error rather than an Apple API status error.
+> This failure is returned as an `*applebusiness.TokenError`, wrapped in `*url.Error` for API
+> calls (`Get ".../v1/...": applebusiness oauth: token failed (429): ...`). It is **not** an
+> `*applebusiness.APIError`, but `applebusiness.IsRateLimited(err)` matches it, and
+> `errors.As(err, &tokErr)` gives the status, the OAuth `error` / `error_description`, the headers
+> and `RetryAfter`. Token-endpoint `429` / `5xx` are retried within the client's retry count for
+> every method, POST included, because the API request has not been sent yet; other token errors
+> such as `invalid_client` are returned at once and reported by `applebusiness.IsUnauthorized`.
+> Retrying does not remove the cause, though — reuse the `Client`.
 >
 > Mitigations:
 > - **Long-lived processes: create the `Client` once and share it** (simplest and safest).
@@ -216,7 +220,8 @@ if applebusiness.IsRateLimited(err) && errors.As(err, &apiErr) {
 
 > [!NOTE]
 > Apple does not document whether rate-limited responses carry `Retry-After`, so always have a fallback
-> backoff. A `429` from the **token endpoint** is not an `*APIError` (see [Authentication](#authentication)).
+> backoff. A `429` from the **token endpoint** is an `*applebusiness.TokenError`, not an `*APIError`;
+> `IsRateLimited` matches both (see [Authentication](#authentication)).
 
 ---
 
