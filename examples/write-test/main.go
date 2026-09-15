@@ -19,19 +19,18 @@
 //	go run ./examples/write-test                  # ドライラン（実行計画の表示のみ）
 //	go run ./examples/write-test -yes             # Blueprint/Configuration の作成→更新→削除を実行
 //	go run ./examples/write-test -yes -app <id>   # 併せて Blueprint の apps リレーション付替も試す
-//	go run ./examples/write-test -yes -replace-empty [-app <id>]  # 空集合の Replace（関連を空にする置換）を観測する
+//	go run ./examples/write-test -yes -replace-empty [-app <id>]  # Blueprint 関連への Replace(PATCH) を観測する
 //	go run ./examples/write-test -yes -assign-server <mdmId> -assign-device <serial>  # 割り当ても試す（復元あり）
 //
-// -replace-empty は、テスト用 Blueprint（中身は Configuration 1 件のみ）で空集合の Replace を試し、
-// 作成時の「中身／割り当て先が各 1 件以上」という制約が関連の更新時にもかかるかを結果と想定を並べて表示する。
+// -replace-empty は、テスト用 Blueprint で関連（apps / configurations）への Replace(PATCH) を試す。
+// 実機は Blueprint 関連への REPLACE を許可しない（403 FORBIDDEN_ERROR、#44）ことを、結果と想定を並べて確認する。
 // 観測が目的のため、その結果は成功／失敗の集計に含めない。
 package main
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
@@ -54,7 +53,7 @@ func main() {
 	yes := flag.Bool("yes", false, "実際に書き込みを実行する（未指定はドライラン＝無変更）")
 	keep := flag.Bool("keep", false, "作成したテスト用リソースを削除せず残す")
 	appID := flag.String("app", "", "Blueprint の apps リレーション付替テストに使う app ID（任意）")
-	replaceEmpty := flag.Bool("replace-empty", false, "テスト用 Blueprint で空集合の Replace を試し、更新時にも最低1件の制約がかかるかを観測する")
+	replaceEmpty := flag.Bool("replace-empty", false, "テスト用 Blueprint で関連への Replace(PATCH) を試す（実機は 403 で拒否する。#44）")
 	assignServer := flag.String("assign-server", "", "割り当てテスト対象の MDM サーバ ID（-assign-device と併用で実行）")
 	assignDevice := flag.String("assign-device", "", "割り当てテスト対象のデバイス ID(serial)")
 	timeout := flag.Duration("timeout", 10*time.Minute, "全体タイムアウト")
@@ -275,12 +274,12 @@ func pollPrint(ctx context.Context, svc *devices.Service, activityID string) {
 	fmt.Printf("  activity %s: status=%s subStatus=%s\n", activityID, final.Attributes.Status, final.Attributes.SubStatus)
 }
 
-// runReplaceEmpty は空集合の Replace（関連を空にする置換）を実機で試し、結果を想定と並べて表示する（#36）。
-// 作成時の「中身／割り当て先が各 1 件以上」の制約が更新時にもかかるかの観測なので、Replace の結果は
-// 成功／失敗の集計に含めない（準備の AddTo だけ report で数える）。テスト用 Blueprint の中身は
-// Configuration 1 件だけという前提。どの結果でも、この後の削除による後始末はそのまま動く。
+// runReplaceEmpty はテスト用 Blueprint の関連への Replace(PATCH) を実機で試し、結果を想定と並べて表示する（#36 / #44）。
+// 実機は Blueprint 関連への REPLACE を許可しない（403 FORBIDDEN_ERROR、apps / configurations で確認）ことの確認が目的で、
+// 空集合でも非空でも同じ 403 になる。観測が目的なので Replace の結果は成功／失敗の集計に含めない（準備の AddTo だけ report で数える）。
+// どの結果でも、この後の削除による後始末はそのまま動く。
 func runReplaceEmpty(ctx context.Context, svc *blueprints.Service, bpID, appID string, report func(string, error)) {
-	fmt.Println("  -- 空集合の Replace（-replace-empty, #36）--")
+	fmt.Println("  -- Blueprint 関連への Replace（-replace-empty, #36 / #44）--")
 	if appID == "" {
 		fmt.Println("  （-app 未指定のため apps の空置換はスキップ）")
 	} else {
@@ -288,12 +287,12 @@ func runReplaceEmpty(ctx context.Context, svc *blueprints.Service, bpID, appID s
 		report("blueprints.AddTo(apps)（replace-empty の準備）", aerr)
 		if aerr == nil {
 			observe("blueprints.Replace(apps, [])",
-				"成功（Configuration が中身として残るため）",
+				"403 FORBIDDEN_ERROR（apps は REPLACE 非対応。空集合でも同じ）",
 				svc.Replace(ctx, bpID, blueprints.RelApps, []string{}))
 		}
 	}
 	observe("blueprints.Replace(configurations, [])",
-		"409 ENTITY_ERROR.RELATIONSHIP.INVALID.MISSING_RESOURCES（中身が 0 件になるため。更新時にも制約がかかる場合）",
+		"403 FORBIDDEN_ERROR（configurations は REPLACE 非対応。空集合でも同じ）",
 		svc.Replace(ctx, bpID, blueprints.RelConfigurations, []string{}))
 }
 
@@ -384,9 +383,10 @@ func sampleMobileconfig(name string) string {
 
 // selfSignedCertBase64 は MDM サーバ登録用の自己署名 X.509 証明書を生成し、
 // Base64（DER）で返す。鍵はこの場で捨てる（本物の MDM とペアリングする用途ではなく、
-// CRUD の疎通確認のみが目的）。
+// CRUD の疎通確認のみが目的）。実機は EC 証明書を拒否する（400 "only RSA is supported"、#44）
+// ため RSA 2048 で生成する。
 func selfSignedCertBase64(cn string) string {
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		fatalf("generate cert key: %v", err)
 	}

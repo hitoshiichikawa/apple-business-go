@@ -12,6 +12,10 @@
   - `neilmartin83/terraform-provider-axm` (Go) … 全エンドポイント＋エンティティ型＋OAuth
 - **信頼度**: 認証フローの主要値は上記2実装で**一致**を確認済み。ただし二次情報由来のため、
   本番投入前にApple公式の各ページで最終確認を推奨（特に下記「要確認」項目）。
+- **プロヴェナンス表記**: 記述の出所を次の印で区別する。**印の無い記述は ❓推測（二次情報由来）とみなすこと**:
+  - ✅ 実機確認済み（テナント・日付つき。例: demo 2026-09-15。`livetest` で再現可能）
+  - 📄 Apple 公式 DocC 確認済み
+  - ❓ 推測（JSON:API の慣習・公開 Go 実装由来。未確認）
 
 ---
 
@@ -316,9 +320,9 @@ Configurations はセキュリティ/ネットワーク等の設定単位、Blue
 }
 ```
 - `attributes.name` 必須、`description` 任意。
-- ⚠️ **実機（2026-06 時点）では `relationships` も必須**: 「中身」(`apps`/`packages`/`configurations`) と
+- ✅ **実機（demo, 2026-06 初回 / 2026-09-15 `livetest` 再確認）で `relationships` も必須**: 「中身」(`apps`/`packages`/`configurations`) と
   「割り当て先」(`orgDevices`/`users`/`userGroups`) を**各カテゴリ最低1つずつ**指定する必要がある。欠けると 409
-  （中身なし=`MISSING_RESOURCES` / 割り当て先なし=`MISSING_MEMBERS`）。作成と割り当てを分離できない点に注意。`examples/write-test` で確認。
+  （中身なし=`MISSING_RESOURCES` / 割り当て先なし=`MISSING_MEMBERS`）。作成と割り当てを分離できない点に注意。`examples/write-test` / `livetest` で確認。
 - ⚠️ `name` はスペース・括弧など不可（英数字・ハイフン等のみ。違反は 409 `ENTITY_ERROR.ATTRIBUTE.INVALID`）。
   Configuration の `name` はスペース・括弧可で、リソースごとに名前制約が異なる。
 
@@ -331,13 +335,15 @@ Configurations はセキュリティ/ネットワーク等の設定単位、Blue
 ```json
 { "data": [ { "type": "orgDevices", "id": "ABC123" }, ... ] }
 ```
-- `POST` = 追加、`DELETE` = 削除、`PATCH` = 集合の置換。
+- `POST` = 追加、`DELETE` = 削除。**`PATCH`（集合の置換）は実機では拒否される（下記）。**
 - `{rel}` と各要素の `type` は対応（`orgDevices` / `users` / `userGroups` / `apps` / `configurations` / `packages`）。
 - 運用: 現在の集合と目標の集合を差分し、追加分を `POST`・削除分を `DELETE`。
-- `PATCH` に空配列 `{"data":[]}` を送ると集合を空にする（SDK の `blueprints.Replace` に空集合を渡した場合。#36）。
-- ⚠️ 作成時の「中身と割り当て先が各カテゴリ最低 1 つ」の制約が更新時にもかかるなら、最後の 1 件がなくなる置換・削除は 409
-  （`ENTITY_ERROR.RELATIONSHIP.INVALID.MISSING_RESOURCES` / `MISSING_MEMBERS`）になる。**更新時にこの制約がかかるかは未確認**。
-  `go run ./examples/write-test -yes -replace-empty [-app <id>]` で確認する。
+- ✅ **実機（demo, 2026-09-15）: Blueprint 関連への `REPLACE`（PATCH）は許可されない。** `apps` / `configurations` /
+  `packages` / `orgDevices` の 4 種で 403 `FORBIDDEN_ERROR`「The relationship '<rel>' does not allow 'REPLACE'. Allowed
+  operations are: CREATE, DELETE, GET_RELATIONSHIP」を確認（空配列 `{"data":[]}` でも同じ）。`users` / `userGroups` は
+  直接は未実行だが、同じメンバー系の `orgDevices` が 403 のため同様とみなす（❓）。SDK の `blueprints.Replace` は PATCH を
+  送るため 403 になる（`applebusiness.IsForbidden` で判定）。集合を変えるには `AddTo`（POST）/ `RemoveFrom`（DELETE）を使う。
+  検証は `livetest`（`go test -tags livetest ./livetest`）。詳細は [#44](https://github.com/hitoshiichikawa/apple-business-go/issues/44)。
 
 ### 7.3 Configuration — 読み取り / 操作系（確定）
 
