@@ -154,7 +154,8 @@ func NewClient(cfg Config, opts ...Option) (*Client, error) {
 
 // AccessToken returns the current access token (issuing a new one if needed) and its expiry.
 // It is useful for verifying authentication on its own. Regular API calls attach the token
-// automatically, so calling this explicitly is not required.
+// automatically, so calling this explicitly is not required. When the token endpoint
+// rejects the request, the error is a *TokenError.
 func (c *Client) AccessToken() (string, time.Time, error) {
 	tok, err := c.ts.Token()
 	if err != nil {
@@ -177,6 +178,12 @@ func (c *Client) BaseURL() string { return c.baseURL }
 // A non-2xx response that is not retried, or the last one when retries are
 // exhausted, is returned as *APIError with its status, decoded body, response
 // headers and parsed Retry-After.
+//
+// If an access token cannot be obtained, the token endpoint's failure is
+// returned as *TokenError (wrapped in *url.Error). Its 429 / 5xx are retried in
+// the same way for every method, POST included, because the API request itself
+// has not been sent; other token errors (e.g. invalid_client) are returned
+// immediately.
 // It is normally used by service packages through List/Get/Create.
 //
 // Because the bearer token is attached to every request, rawurl must point at
@@ -222,6 +229,16 @@ func (c *Client) Do(ctx context.Context, method, rawurl string, body []byte, out
 			// クロスホストリダイレクト拒否はリトライしても結果が変わらない。
 			if errors.Is(err, errCrossHost) {
 				return err
+			}
+			// トークン取得の失敗（*TokenError）は API へのリクエストを送る前に起きる。
+			// 429 / 5xx は POST を含む全メソッドで再試行しても二重実行にならない。
+			// それ以外（invalid_client 等）は再試行しても結果が変わらないので即返す（#37）。
+			var tokErr *TokenError
+			if errors.As(err, &tokErr) {
+				if !tokErr.retryable() || attempt >= c.maxRetries || !sleepBackoff(ctx, attempt, tokErr.RetryAfter) {
+					return err
+				}
+				continue
 			}
 			// POST はレスポンス未受領でもサーバ側で処理済みの可能性があり、
 			// 再送すると二重実行になり得るため再試行しない。

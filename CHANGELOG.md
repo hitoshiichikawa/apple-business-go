@@ -7,11 +7,13 @@
 ### Changed
 - **破壊的変更: `WithMaxRetries(0)` がリトライ無効を意味するように変更**（#35）。従来は 0 以下を無視して既定の 4 回リトライしていたが、`WithMaxRetries(n)`（n ≤ 0）はリトライせず 1 回だけ送信し、最初の失敗（429 等）をそのまま返す。また `WithMaxRetries` を指定した場合は、値にかかわらず `Config.MaxRetries` より優先される（従来は 0 を渡すと `Config.MaxRetries` が使われた）。上位でレート制御を行う場合（429 でキューを止める等）に、SDK 内部のリトライと二重にならないようにするため。
 - リトライ時の待ち時間に、`Retry-After` の HTTP-date 形式も反映するように変更（従来は秒数形式のみ）（#35）。
+- **挙動の変更: トークン取得に失敗したときのリトライと判定を変更**（#37）。従来はトークンエンドポイントのエラーをネットワークエラーと同じに扱っていたため、GET / PATCH / DELETE は `invalid_client` のように再試行しても直らないエラーでもリトライし、POST は 429 でもリトライしなかった。変更後は、トークン取得の 429 / 5xx は API へのリクエストがまだ送られていないため POST を含む全メソッドでリトライし（`Retry-After` があれば従い、回数は `MaxRetries` に従う）、それ以外のトークンエラーはリトライせずに即座に返す。また `IsRateLimited` / `IsUnauthorized` がトークン取得のエラーにも true を返すようになった（`IsNotFound` / `IsForbidden` / `IsConflict` は従来どおり API のエラーのみ）。
 
 ### Added
 - `APIError.Header`（レスポンスヘッダー、`json:"-"`）と `APIError.RetryAfter`（`Retry-After` を秒数・HTTP-date の両形式で解釈した値。ヘッダーなし・解釈不能・過去の日時は 0）を追加（#35）。Apple は 429 に `Retry-After` を付けるかを公表していないため、0 の場合は呼び出し側のバックオフに任せる。
 - 429 / 5xx でリトライを使い切った場合（またはリトライ無効の場合）も、最後の応答の本文を `APIError.Errors` / `APIError.RawBody` に保持する（#35）。従来はステータスコードのみで、本文は破棄されていた。
 - `examples/write-test` に `-replace-empty` を追加。テスト用 Blueprint で空集合の `Replace` を実機で試し、作成時の「中身（apps/packages/configurations）と割り当て先（orgDevices/users/userGroups）が各 1 件以上」という制約（409 `MISSING_RESOURCES` / `MISSING_MEMBERS`）が関連の更新時にもかかるかを確認できる（#36）。
+- `applebusiness.TokenError`: トークンエンドポイントが 200 以外を返したときのエラー型（`StatusCode` / `Code`（OAuth の `error`）/ `Description`（`error_description`）/ `RawBody` / `Header` / `RetryAfter`）（#37）。API 呼び出しからは `*url.Error` に包まれて返るため `errors.As` で取り出す。`Client.AccessToken` はそのまま返す。`Error()` の文字列は従来と同じ形式（`applebusiness oauth: token failed (429): invalid_request ...`）。
 
 ### Fixed
 - `Config.MaxRetries` が負の値のとき、`Client.Do` がリクエストを 1 回も送らずに `nil` エラーを返していた（`Get` 等がゼロ値のリソースを成功として返していた）不具合を修正（#35）。負の値はリトライ無効（1 回だけ送信）として扱う。0（ゼロ値）は従来どおり既定の 4 回。

@@ -98,19 +98,17 @@ func (s *tokenSource) Token() (*oauth2.Token, error) {
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := s.client.Do(req)
+	// bodyclose はヘルパ（drainAndClose）経由のクローズを追跡できないが、直後の defer でクローズしている。
+	resp, err := s.client.Do(req) //nolint:bodyclose
 	if err != nil {
 		return nil, fmt.Errorf("applebusiness oauth: token request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer drainAndClose(resp.Body)
 
+	// 200 以外は *TokenError で返し、呼び出し側が errors.As / IsRateLimited /
+	// IsUnauthorized で判定でき、Client.Do が再試行の可否を決められるようにする（#37）。
 	if resp.StatusCode != http.StatusOK {
-		var e struct {
-			Err  string `json:"error"`
-			Desc string `json:"error_description"`
-		}
-		_ = json.NewDecoder(resp.Body).Decode(&e)
-		return nil, fmt.Errorf("applebusiness oauth: token failed (%d): %s %s", resp.StatusCode, e.Err, e.Desc)
+		return nil, decodeTokenError(resp)
 	}
 
 	var tr struct {
