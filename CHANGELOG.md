@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Changed
+- `docs/apple-business-api-reference.md` のレート制限を実測で更新。API 側 `429` には `Retry-After`（秒数形式、実測値 `60`）が付き、`X-RateLimit-*` 系のヘッダーは無いことを demo テナントで確認（並列 10・約 11 req/s・計 51 リクエストで発火）。ドキュメントの「100 req/s」は出所不明の推測（❓）に格下げ。
+
 ## [0.11.0] - 2026-09-15
 
 ### Changed

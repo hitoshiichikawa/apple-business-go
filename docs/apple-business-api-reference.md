@@ -26,10 +26,21 @@
 | ベースURL (ABM) | `https://api-business.apple.com` |
 | ベースURL (ASM) | `https://api-school.apple.com` |
 | バージョンprefix | `/v1` |
-| レート上限 | 100 req/s |
+| レート上限 | ❓ 100 req/s（出所不明の推測）。✅ 実測は遥かに手前で発火 → 下記 |
 | ページネーション | カーソル方式。`meta.paging.nextCursor` / `links.next`。既定 `limit=100` |
 | レスポンス形式 | JSON:API 風（`data` / `links` / `meta`、リレーションは `relationships`） |
 | 認可ヘッダ | `Authorization: Bearer <access_token>` |
+
+> ✅ **レート制限（実測: demo, 2026-09-15）**: `GET /v1/orgDevices` を並列 10（≈11 req/s）で送ったところ、
+> 約 4.5 秒・計 51 リクエストで `429 Too Many Requests` が返った。ドキュメント上の「100 req/s」より遥かに手前で
+> 発火する（他の公開観測でも「数 req/s の並列で throttle」という報告がある）。
+> - **`429` には `Retry-After` が付く**（**秒数形式**。実測値 `60`。HTTP-date 形式ではない）。`X-RateLimit-*` のような
+>   残数ヘッダーは無く、手がかりは `Retry-After` と `X-Apple-Request-Uuid`（障害調査用）のみ。ボディは
+>   `application/octet-stream`（JSON:API エラー文書ではない）。
+> - 制限は **API アカウント（`client_id`）単位**。SDK では `applebusiness.IsRateLimited` で判定し、
+>   `APIError.RetryAfter`（秒数・HTTP-date を解釈済み）で待つ。実測では値が入っていたが、Apple は仕様を公表して
+>   いないため、`RetryAfter == 0` のときのフォールバック（自前バックオフ）は保険として残すこと。
+> - トークンエンドポイント（`account.apple.com`）側の 429 が `Retry-After` を付けるかは ❓未確認。
 
 ---
 
