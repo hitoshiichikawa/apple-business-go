@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+### Changed
+- `blueprints.Replace` のドキュメントを実機挙動に合わせて訂正（#44）。実 AB は Blueprint 関連への `REPLACE`（PATCH）を拒否し、`apps` / `configurations` で 403 `FORBIDDEN_ERROR`（"does not allow 'REPLACE'"）を確認した（空集合でも同じ）。関連の変更は `AddTo`（POST）/ `RemoveFrom`（DELETE）を使う。#36 で記載した「空集合 → 409 MISSING_RESOURCES」は誤りのため訂正。
+
+### Added
+- `livetest` パッケージ（#44）: 実テナントに対する応答期待の網羅検証。`go test -tags livetest ./livetest` で実行し、`AXM_*` 未設定時は skip する（通常の `go test ./...` / CI からは build タグで除外）。
+
+### Fixed
+- `examples/write-test` の MDM サーバ登録用の自己署名証明書を RSA で生成するよう修正（#44）。実機は EC 証明書を 400（`PARAMETER_ERROR.INVALID` "only RSA is supported"）で拒否する。
+
 ## [0.10.0] - 2026-09-15
 
 ### Changed
