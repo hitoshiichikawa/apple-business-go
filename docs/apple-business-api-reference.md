@@ -331,13 +331,14 @@ Configurations はセキュリティ/ネットワーク等の設定単位、Blue
 ```json
 { "data": [ { "type": "orgDevices", "id": "ABC123" }, ... ] }
 ```
-- `POST` = 追加、`DELETE` = 削除、`PATCH` = 集合の置換。
+- `POST` = 追加、`DELETE` = 削除。**`PATCH`（集合の置換）は実機では拒否される（下記）。**
 - `{rel}` と各要素の `type` は対応（`orgDevices` / `users` / `userGroups` / `apps` / `configurations` / `packages`）。
 - 運用: 現在の集合と目標の集合を差分し、追加分を `POST`・削除分を `DELETE`。
-- `PATCH` に空配列 `{"data":[]}` を送ると集合を空にする（SDK の `blueprints.Replace` に空集合を渡した場合。#36）。
-- ⚠️ 作成時の「中身と割り当て先が各カテゴリ最低 1 つ」の制約が更新時にもかかるなら、最後の 1 件がなくなる置換・削除は 409
-  （`ENTITY_ERROR.RELATIONSHIP.INVALID.MISSING_RESOURCES` / `MISSING_MEMBERS`）になる。**更新時にこの制約がかかるかは未確認**。
-  `go run ./examples/write-test -yes -replace-empty [-app <id>]` で確認する。
+- ⚠️ **実機（2026-09 時点）は Blueprint 関連への `REPLACE`（PATCH）を許可しない**: `apps` / `configurations` で
+  403 `FORBIDDEN_ERROR`「The relationship '<rel>' does not allow 'REPLACE'. Allowed operations are: CREATE, DELETE, GET_RELATIONSHIP」
+  を確認（空配列 `{"data":[]}` でも同じ）。`packages` も同様と推測。メンバー系（`orgDevices` / `users` / `userGroups`）は未確認。
+  SDK の `blueprints.Replace` は PATCH を送るため、これらの関連では 403 になる（`applebusiness.IsForbidden` で判定）。集合を
+  変えるには `AddTo`（POST）/ `RemoveFrom`（DELETE）を使う。詳細は [#44](https://github.com/hitoshiichikawa/apple-business-go/issues/44)。
 
 ### 7.3 Configuration — 読み取り / 操作系（確定）
 
