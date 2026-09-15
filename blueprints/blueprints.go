@@ -151,15 +151,15 @@ func (s *Service) RemoveFrom(ctx context.Context, id, rel string, ids []string) 
 // Replace replaces the set of members in a relationship (PATCH). An empty (or
 // nil) ids sends {"data":[]}.
 //
-// Apple rejects PATCH/REPLACE on Blueprint relationships: apps and
-// configurations were confirmed on a real tenant to return 403 FORBIDDEN_ERROR
-// ("The relationship '<rel>' does not allow 'REPLACE'. Allowed operations are:
-// CREATE, DELETE, GET_RELATIONSHIP"), whether ids is empty or not, and packages
-// is expected to behave the same; the member relationships (orgDevices, users,
-// userGroups) are unconfirmed. To change a relationship, read the current set
-// with Relationship and apply the difference with AddTo (POST) and RemoveFrom
-// (DELETE). Detect the rejection with applebusiness.IsForbidden. See issue #44
-// for the plan for this method.
+// Apple rejects PATCH/REPLACE on Blueprint relationships: apps, configurations,
+// packages and orgDevices were confirmed on a real tenant (demo, 2026-09-15) to
+// return 403 FORBIDDEN_ERROR ("The relationship '<rel>' does not allow
+// 'REPLACE'. Allowed operations are: CREATE, DELETE, GET_RELATIONSHIP"), whether
+// ids is empty or not; users and userGroups were not tested directly but the
+// member relationship orgDevices behaves the same, so expect 403 there too. To
+// change a relationship, read the current set with Relationship and apply the
+// difference with AddTo (POST) and RemoveFrom (DELETE). Detect the rejection
+// with applebusiness.IsForbidden. See issue #44 for the plan for this method.
 func (s *Service) Replace(ctx context.Context, id, rel string, ids []string) error {
 	return s.modifyRel(ctx, http.MethodPatch, id, rel, ids)
 }
