@@ -182,3 +182,24 @@ const (
 	LostModeEnabled      = "ENABLED"
 	LostModeDisabled     = "DISABLED"
 )
+
+// --- Activation Lock (Apple Business API 2.6, added 2026-09-16) ---
+
+// ActivationLockStatus is the Activation Lock status of an organization device
+// (GET /v1/orgDevices/{id}/activationLockStatus). The resource type is
+// "activationLockStatus" and the ID is the device's serial number.
+type ActivationLockStatus = applebusiness.ResourceObject[ActivationLockStatusAttributes]
+
+// ActivationLockStatusAttributes holds the attributes of an ActivationLockStatus.
+// LockType is meaningful when IsLocked is true.
+type ActivationLockStatusAttributes struct {
+	IsLocked bool   `json:"isLocked"`
+	LockType string `json:"lockType,omitempty"` // ActivationLockType: MDM | USER | NONE
+}
+
+// Values of ActivationLockType (ActivationLockStatusAttributes.LockType).
+const (
+	ActivationLockTypeMDM  = "MDM"  // locked by the device management service
+	ActivationLockTypeUser = "USER" // locked to a personal Apple Account
+	ActivationLockTypeNone = "NONE" // not Activation Locked
+)

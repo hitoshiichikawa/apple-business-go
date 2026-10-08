@@ -1,6 +1,6 @@
 // Package devices covers the device-management pillar of the Apple Business API:
 // organization devices, MDM servers (device management services), AppleCare
-// coverage, and device-assignment activities.
+// coverage, Activation Lock status, and device-assignment activities.
 package devices
 
 import (
@@ -35,6 +35,19 @@ func (s *Service) AssignedServer(ctx context.Context, deviceID string) (*MdmServ
 // AppleCareCoverage returns AppleCare coverage for a device.
 func (s *Service) AppleCareCoverage(ctx context.Context, deviceID string) (*Coverage, error) {
 	return applebusiness.Get[AppleCareCoverageAttributes](ctx, s.c, "/v1/orgDevices/"+url.PathEscape(deviceID)+"/appleCareCoverage")
+}
+
+// ActivationLockStatus returns the Activation Lock status of a device
+// (GET /v1/orgDevices/{id}/activationLockStatus, Apple Business API 2.6;
+// added 2026-09-16). deviceID is the device's serial number; a 404
+// (applebusiness.IsNotFound) means the organization does not manage a device
+// with that serial number.
+//
+// Apple notes that the request can also fail with an unexpected server error
+// if the device reports an internal-only lock state that isn't valid for a
+// managed device.
+func (s *Service) ActivationLockStatus(ctx context.Context, deviceID string) (*ActivationLockStatus, error) {
+	return applebusiness.Get[ActivationLockStatusAttributes](ctx, s.c, "/v1/orgDevices/"+url.PathEscape(deviceID)+"/activationLockStatus")
 }
 
 // ListMdmServers returns all MDM servers (device management services).

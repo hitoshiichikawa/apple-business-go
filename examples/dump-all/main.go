@@ -195,6 +195,7 @@ func (d *dumper) run() {
 			d.get("/v1/orgDevices/" + esc(id))
 			d.get("/v1/orgDevices/" + esc(id) + "/assignedServer")
 			d.get("/v1/orgDevices/" + esc(id) + "/appleCareCoverage")
+			d.get("/v1/orgDevices/" + esc(id) + "/activationLockStatus") // API 2.6（2026-09-16 追加）
 		}
 	}
 
