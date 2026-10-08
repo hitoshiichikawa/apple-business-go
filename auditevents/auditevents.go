@@ -152,7 +152,120 @@ type (
 	}
 )
 
-// All AuditEventType values (33 in total). Compare against Attributes.Type to branch on the event.
+// Event-specific payloads added in Apple Business API 2.6 (2026-09-23; per the DocC).
+// EXTERNAL_ACCOUNT_INVITED / ACCOUNT_IMAGE_SET / ACCOUNT_IMAGE_REPLACED / ACCOUNT_IMAGE_REMOVED
+// carry no event-specific fields (their eventData object is empty).
+type (
+	// ROLE_CREATED
+	RoleCreated struct {
+		Privileges []string `json:"privileges,omitempty"` // permissions granted to the role
+	}
+	// ROLE_UPDATED
+	RoleUpdated struct {
+		PrivilegesAdded   []string `json:"privilegesAdded,omitempty"`
+		PrivilegesRemoved []string `json:"privilegesRemoved,omitempty"`
+	}
+	// TERMS_ACCEPTED
+	TermsAccepted struct {
+		TermsName string `json:"termsName,omitempty"`
+	}
+	// DOMAIN_FEDERATION_ENABLED
+	DomainFederationEnabled struct {
+		ActivityID     string `json:"activityId,omitempty"`     // domain federation activity
+		ScimActivityID string `json:"scimActivityId,omitempty"` // associated SCIM provisioning activity
+	}
+	// DOMAIN_FEDERATION_DISABLED
+	DomainFederationDisabled struct {
+		ActivityID string `json:"activityId,omitempty"`
+	}
+	// BATCH_PASSWORD_RESET_INITIATED
+	BatchPasswordResetInitiated struct {
+		ActivityID string `json:"activityId,omitempty"`
+	}
+	// ACCOUNT_PASSWORD_CHANGED
+	AccountPasswordChanged struct {
+		ActivityID string `json:"activityId,omitempty"`
+	}
+	// IDP_CREATED
+	IDPCreated struct {
+		VendorName string `json:"vendorName,omitempty"` // AuditEventIdpVendorName (IDPVendor* constants)
+		Protocol   string `json:"protocol,omitempty"`   // AuditEventIdpProtocol (IDPProtocol* constants)
+	}
+	// IDP_UPDATED / IDP_DELETED
+	IDP struct {
+		VendorName string `json:"vendorName,omitempty"` // AuditEventIdpVendorName (IDPVendor* constants)
+	}
+	// IDP_ACCOUNT_SYNC_ENABLED / IDP_ACCOUNT_SYNC_DISABLED
+	IDPAccountSync struct {
+		VendorName string `json:"vendorName,omitempty"` // AuditEventIdpVendorName (IDPVendor* constants)
+		ActivityID string `json:"activityId,omitempty"` // account sync activity
+	}
+	// APPLE_SERVICES_SETTINGS_UPDATED
+	AppleServicesSettingsUpdated struct {
+		SettingsEnabled  []string `json:"settingsEnabled,omitempty"`
+		SettingsDisabled []string `json:"settingsDisabled,omitempty"`
+	}
+)
+
+// Values of AuditEventIdpVendorName (IDPCreated / IDP / IDPAccountSync .VendorName; API 2.6).
+const (
+	IDPVendorGoogle        = "GOOGLE"
+	IDPVendorMicrosoft     = "MICROSOFT"
+	IDPVendorMicrosoftOIDC = "MICROSOFT_OIDC" // Microsoft using the OpenID Connect protocol
+	IDPVendorGenericIDP    = "GENERIC_IDP"    // a generic (custom) identity provider
+)
+
+// Values of AuditEventIdpProtocol (IDPCreated.Protocol; API 2.6).
+const (
+	IDPProtocolOIDC = "OIDC"
+	IDPProtocolSAML = "SAML"
+)
+
+// Values of AuditEventCategory (Attributes.Category). ACCESS_MANAGEMENT was
+// added in API 2.6. Note: the live API has been observed returning
+// "DEVICE_ACTIVITY" for DEVICE_ASSIGNED_TO_SERVER, which is not in the DocC
+// enumeration; treat unknown values as opaque strings.
+const (
+	CategoryOrganization     = "ORGANIZATION"
+	CategoryAccountActivity  = "ACCOUNT_ACTIVITY"
+	CategoryDeviceInventory  = "DEVICE_INVENTORY"
+	CategoryPurchasing       = "PURCHASING"
+	CategoryDeviceManagement = "DEVICE_MANAGEMENT"
+	CategoryAccessManagement = "ACCESS_MANAGEMENT"
+)
+
+// Values of AuditEventSubjectType (Attributes.SubjectType). ROLE / IDP /
+// INVITATION were added in API 2.6.
+const (
+	SubjectOrganization            = "ORGANIZATION"
+	SubjectUser                    = "USER"
+	SubjectLocation                = "LOCATION"
+	SubjectDevice                  = "DEVICE"
+	SubjectCollection              = "COLLECTION"
+	SubjectDeviceManagementSetting = "DEVICE_MANAGEMENT_SETTING"
+	SubjectSubscription            = "SUBSCRIPTION"
+	SubjectDomain                  = "DOMAIN"
+	SubjectAPIUser                 = "API_USER"
+	SubjectRole                    = "ROLE"
+	SubjectIDP                     = "IDP"
+	SubjectInvitation              = "INVITATION"
+)
+
+// Values of AuditEventActorType (Attributes.ActorType).
+const (
+	ActorUser    = "USER"
+	ActorAPIUser = "API_USER"
+	ActorSystem  = "SYSTEM"
+)
+
+// Values of AuditEventOutcome (Attributes.Outcome).
+const (
+	OutcomeSuccess = "SUCCESS"
+	OutcomeFailure = "FAILURE"
+)
+
+// All AuditEventType values (50 in total; the last 17 were added in Apple Business API 2.6,
+// 2026-09-23). Compare against Attributes.Type to branch on the event; filter[type] accepts one of them.
 // For the eventData payload of each type, see docs/apple-business-api-datatypes.md §4.3.
 const (
 	TypeDeviceAddedToOrg                       = "DEVICE_ADDED_TO_ORG"
@@ -188,6 +301,25 @@ const (
 	TypeAPIAccountKeyGenerated                 = "API_ACCOUNT_KEY_GENERATED"
 	TypeAPIAccountRoleLocationChanged          = "API_ACCOUNT_ROLE_LOCATION_CHANGED"
 	TypeAPIAccountNameChanged                  = "API_ACCOUNT_NAME_CHANGED"
+
+	// Added in Apple Business API 2.6 (2026-09-23).
+	TypeRoleCreated                  = "ROLE_CREATED"
+	TypeRoleUpdated                  = "ROLE_UPDATED"
+	TypeTermsAccepted                = "TERMS_ACCEPTED"
+	TypeDomainFederationEnabled      = "DOMAIN_FEDERATION_ENABLED"
+	TypeDomainFederationDisabled     = "DOMAIN_FEDERATION_DISABLED"
+	TypeBatchPasswordResetInitiated  = "BATCH_PASSWORD_RESET_INITIATED"
+	TypeExternalAccountInvited       = "EXTERNAL_ACCOUNT_INVITED"
+	TypeAccountImageSet              = "ACCOUNT_IMAGE_SET"
+	TypeAccountImageReplaced         = "ACCOUNT_IMAGE_REPLACED"
+	TypeAccountImageRemoved          = "ACCOUNT_IMAGE_REMOVED"
+	TypeIDPCreated                   = "IDP_CREATED"
+	TypeIDPUpdated                   = "IDP_UPDATED"
+	TypeIDPDeleted                   = "IDP_DELETED"
+	TypeIDPAccountSyncEnabled        = "IDP_ACCOUNT_SYNC_ENABLED"
+	TypeIDPAccountSyncDisabled       = "IDP_ACCOUNT_SYNC_DISABLED"
+	TypeAppleServicesSettingsUpdated = "APPLE_SERVICES_SETTINGS_UPDATED"
+	TypeAccountPasswordChanged       = "ACCOUNT_PASSWORD_CHANGED"
 )
 
 // Service exposes the audit-events endpoint. Construct with New.
@@ -201,6 +333,8 @@ func New(c *applebusiness.Client) *Service { return &Service{c: c} }
 // Note: /v1/auditEvents requires filter[startTimestamp] (omitting it returns 400 PARAMETER_ERROR).
 // ListRange is the simplest way to specify a time range. To pass it manually, set
 // "filter[startTimestamp]" (required, ISO8601) and "filter[endTimestamp]" (optional, ISO8601) in q.
+// Other query parameters per the DocC: "filter[actorId]", "filter[subjectId]", "filter[type]"
+// (one value each; use the Type* constants), "fields[auditEvents]", and "limit" (max 1000).
 func (s *Service) List(ctx context.Context, q url.Values) ([]AuditEvent, error) {
 	return applebusiness.List[Attributes](ctx, s.c, "/v1/auditEvents", q)
 }
