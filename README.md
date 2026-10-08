@@ -24,7 +24,7 @@ authentication, reading devices / users / MDM servers and more, and **assigning 
 ```
 apple-business-go/
 ├── applebusiness/   Core (shared foundation): Client, Config, Credentials, OAuth2/JWT, transport, pagination, errors
-├── devices/         Device management: orgDevices, mdmServers, mdmDevices, orgDeviceActivities, appleCareCoverage
+├── devices/         Device management: orgDevices, mdmServers, mdmDevices, orgDeviceActivities, appleCareCoverage, activationLockStatus
 ├── blueprints/      Blueprint management: CRUD + assignment (apps/configurations/devices/users/groups)
 ├── configurations/  Configuration management: CRUD (CUSTOM_SETTING profiles)
 ├── apps/            Apps / packages (read-only): apps, packages
@@ -112,6 +112,18 @@ act, err := svc.ReleaseDevices(ctx, deviceIDs)
 final, err := svc.PollActivity(ctx, act.ID, 3*time.Second)
 ```
 
+## Quickstart (Activation Lock status, API 2.6+)
+
+The ID is the device's serial number; a 404 (`applebusiness.IsNotFound`) means the
+organization does not manage that device.
+
+```go
+st, err := svc.ActivationLockStatus(ctx, serialNumber)
+if err == nil && st.Attributes.IsLocked {
+    fmt.Println("locked by", st.Attributes.LockType) // devices.ActivationLockTypeMDM or ActivationLockTypeUser
+}
+```
+
 Runnable samples live in [`examples/`](./examples) (`list-devices`, `assign-devices`, `smoke-test`, `dump-all`, `write-test`).
 For a connectivity check use [`smoke-test`](./examples/smoke-test); to dump every read endpoint use [`dump-all`](./examples/dump-all).
 
@@ -122,11 +134,16 @@ For a connectivity check use [`smoke-test`](./examples/smoke-test); to dump ever
 events, _ := auditevents.New(c).ListRange(ctx, time.Now().AddDate(0, 0, -7), time.Now(), nil)
 for _, ev := range events {
     a := ev.Attributes // common fields: a.Type, a.ActorID, a.EventDateTime ...
-    if a.Type == "DEVICE_ASSIGNED_TO_SERVER" {
+    if a.Type == auditevents.TypeDeviceAssignedToServer {
         var d auditevents.DeviceAssignedToServer
         _ = a.Payload(&d) // d.SerialNumber, d.TargetServerName
     }
 }
+
+// Filter by one event type (API 2.6 added 17 types, e.g. ROLE_UPDATED / IDP_CREATED / DOMAIN_FEDERATION_ENABLED)
+q := url.Values{"filter[type]": {auditevents.TypeRoleUpdated}}
+events, _ = auditevents.New(c).ListRange(ctx, start, end, q)
+var r auditevents.RoleUpdated // r.PrivilegesAdded / r.PrivilegesRemoved
 ```
 
 ---
@@ -258,7 +275,7 @@ if applebusiness.IsRateLimited(err) && errors.As(err, &apiErr) {
 | Package | Methods | API |
 |---|---|---|
 | `devices` | `List` / `Get` | `/v1/orgDevices`, `/v1/orgDevices/{id}` |
-| `devices` | `AssignedServer` / `AppleCareCoverage` | `/v1/orgDevices/{id}/assignedServer`, `.../appleCareCoverage` |
+| `devices` | `AssignedServer` / `AppleCareCoverage` / `ActivationLockStatus` | `/v1/orgDevices/{id}/assignedServer`, `.../appleCareCoverage`, `.../activationLockStatus` (API 2.6+) |
 | `devices` | `ListMdmServers` / `GetMdmServer` / `CreateMdmServer` / `UpdateMdmServer` / `DeleteMdmServer` / `MdmServerDevices` | `/v1/mdmServers(/{id})`, `/v1/mdmServers/{id}/relationships/devices` (CRUD: API 2.1+) |
 | `devices` | `ListMdmDevices` / `MdmDeviceDetails` | `/v1/mdmDevices`, `/v1/mdmDevices/{id}/details` |
 | `devices` | `Assign` / `Unassign` / `GetActivity` / `PollActivity` | `/v1/orgDeviceActivities(/{id})` |
@@ -270,7 +287,7 @@ if applebusiness.IsRateLimited(err) && errors.As(err, &apiErr) {
 | `blueprints` | `List` / `Get` / `Create` / `Update` / `Delete` / `AddTo` / `RemoveFrom` / `RelationshipIDs` | `/v1/blueprints(/{id})(/relationships/{rel})` |
 | `configurations` | `List` / `Get` / `Create` / `Update` / `Delete` | `/v1/configurations(/{id})` |
 | `apps` | `ListApps` / `GetApp` / `ListPackages` / `GetPackage` | `/v1/apps(/{id})`, `/v1/packages(/{id})` |
-| `auditevents` | `List` / `ListRange` | `/v1/auditEvents` (requires `filter[startTimestamp]`) |
+| `auditevents` | `List` / `ListRange` | `/v1/auditEvents` (requires `filter[startTimestamp]`; all 50 event types of API 2.6 as `Type*` constants) |
 
 The primary source for fields and enum values is [`docs/apple-business-api-datatypes.md`](./docs/apple-business-api-datatypes.md);
 endpoint details are in [`docs/apple-business-api-reference.md`](./docs/apple-business-api-reference.md).

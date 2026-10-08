@@ -126,6 +126,7 @@ scope=<business.api | school.api>
 | GET | `/v1/orgDevices/{id}/relationships/assignedServer` | 割り当て先MDM（リレーション/IDのみ） |
 | GET | `/v1/orgDevices/{id}/assignedServer` | 割り当て先MDM（詳細情報） |
 | GET | `/v1/orgDevices/{id}/appleCareCoverage` | AppleCare保証情報 |
+| GET | `/v1/orgDevices/{id}/activationLockStatus` | 📄 Activation Lock ステータス（**API 2.6+**、2026-09-16 追加。`isLocked` / `lockType`＝`MDM`\|`USER`\|`NONE`。ID＝シリアル番号、未管理なら 404） |
 
 ### 3.3 MDMサーバ（デバイス管理サービス）
 | メソッド | パス | 用途 |
@@ -169,7 +170,8 @@ scope=<business.api | school.api>
 | GET | `/v1/configurations/{id}` | 構成詳細 |
 | GET | `/v1/auditEvents` | 監査イベント（範囲・絞り込みクエリあり） |
 
-`auditEvents` のクエリ: `start_timestamp`, `end_timestamp`（ISO8601, 必須）, `actor_id`, `subject_id`, `event_type`, `cursor`, `limit`, `fields`。
+📄 `auditEvents` のクエリ（DocC で確定）: `filter[startTimestamp]`（✅ 必須。無いと 400）/ `filter[endTimestamp]`（ISO8601）, `filter[actorId]`, `filter[subjectId]`, `filter[type]`（いずれも 1 値のみ。`type` は `AuditEventType` の 50 値）, `fields[auditEvents]`, `limit`（≤1000）, `cursor`。
+> 旧記載の snake_case 名（`start_timestamp` / `actor_id` / `event_type` 等）は ❓二次情報由来の誤りだったため訂正。
 
 ---
 
@@ -255,6 +257,17 @@ scope=<business.api | school.api>
 ### 4.5 Assigned Server Info（`/v1/orgDevices/{id}/assignedServer`）
 `device_id`, `server_id`, `server_name`, `server_type`(MDM/APPLE_CONFIGURATOR/APPLE_MDM),
 `created_date_time`, `updated_date_time`。
+
+### 4.5.1 Activation Lock Status（`/v1/orgDevices/{id}/activationLockStatus`、📄 API 2.6）
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `type` | String | `activationLockStatus` |
+| `id` | String | デバイスのシリアル番号 |
+| `isLocked` | Boolean | Activation Lock 中か |
+| `lockType` | String | **MDM / USER / NONE**（`isLocked` が true のときのロック種別。MDM＝デバイス管理サービス、USER＝個人の Apple Account） |
+
+クエリ `fields[activationLockStatus]`（`isLocked`, `lockType`）。組織が管理していないシリアルは 404。`OrgDevice.Relationships` に `activationLockStatus` が追加されている。
+📄 注記: デバイスが管理対象として無効な internal-only のロック状態を報告した場合、予期しないサーバーエラーで失敗することがある。SDK は `devices.ActivationLockStatus`。
 
 ### 4.6 Audit Event（`/v1/auditEvents`）
 `id`, `actor_id` / `actor_name` / `actor_type`, `subject_id` / `subject_name` / `subject_type`,
@@ -425,8 +438,8 @@ Package.Attributes: `name` / `url` / `hash` / `bundleIds`(`[string]`) / `descrip
   `subjectType`/`subjectId`/`subjectName` / `outcome` / `groupId` / `eventDataPropertyKey`
 - 固有: `eventDataPropertyKey` が示すキー（例 `eventDataDeviceAssignedToServer`）にイベント固有データ。
   例: `AuditEventDeviceAssignedToServer` = `{ serialNumber, targetServerName }`。
-- `AuditEventType` は33種。各 eventData のフィールドは `docs/apple-business-api-datatypes.md` §4 に集約。
-- クエリ: **`filter[startTimestamp]` が必須**（未指定で 400）。`filter[endTimestamp]` と併用、ISO8601。SDK は `ListRange` で付与。
+- `AuditEventType` は 50 種（📄 API 2.6、2026-09-23 で `ROLE_*` / `IDP_*` / `DOMAIN_FEDERATION_*` / `ACCOUNT_IMAGE_*` など 17 種追加）。各 eventData のフィールドは `docs/apple-business-api-datatypes.md` §4 に集約。
+- クエリ: **`filter[startTimestamp]` が必須**（✅ 未指定で 400）。`filter[endTimestamp]` と併用、ISO8601。SDK は `ListRange` で付与。📄 他に `filter[actorId]` / `filter[subjectId]` / `filter[type]`（各 1 値）/ `fields[auditEvents]` / `limit`(≤1000) / `cursor`。
 → SDK `auditevents.Attributes` は共通項目を型付きで保持し、`EventData`(生JSON) を `Payload(&v)` で個別型へデコード。
   主要イベント型（`DeviceAssignedToServer` 等）を同梱。
 （前回「純ユニオン」と記載したが、`AuditEventCommonAttributes` の存在を確認し訂正。参照実装のフラットな
