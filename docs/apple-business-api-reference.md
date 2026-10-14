@@ -126,7 +126,7 @@ scope=<business.api | school.api>
 | GET | `/v1/orgDevices/{id}/relationships/assignedServer` | 割り当て先MDM（リレーション/IDのみ） |
 | GET | `/v1/orgDevices/{id}/assignedServer` | 割り当て先MDM（詳細情報） |
 | GET | `/v1/orgDevices/{id}/appleCareCoverage` | AppleCare保証情報 |
-| GET | `/v1/orgDevices/{id}/activationLockStatus` | 📄 Activation Lock ステータス（**API 2.6+**、2026-09-16 追加。`isLocked` / `lockType`＝`MDM`\|`USER`\|`NONE`。ID＝シリアル番号、未管理なら 404） |
+| GET | `/v1/orgDevices/{id}/activationLockStatus` | ✅ Activation Lock ステータス（**API 2.6+**（ASM API は 1.7+）、2026-09-16 追加。`isLocked` / `lockType`＝`MDM`\|`USER`\|`NONE`。ID＝シリアル番号。✅ demo 2026-10-14: 管理下デバイスで `isLocked=false` / `lockType=NONE`、未管理シリアルは 404） |
 
 ### 3.3 MDMサーバ（デバイス管理サービス）
 | メソッド | パス | 用途 |
@@ -170,7 +170,7 @@ scope=<business.api | school.api>
 | GET | `/v1/configurations/{id}` | 構成詳細 |
 | GET | `/v1/auditEvents` | 監査イベント（範囲・絞り込みクエリあり） |
 
-📄 `auditEvents` のクエリ（DocC で確定）: `filter[startTimestamp]`（✅ 必須。無いと 400）/ `filter[endTimestamp]`（ISO8601）, `filter[actorId]`, `filter[subjectId]`, `filter[type]`（いずれも 1 値のみ。`type` は `AuditEventType` の 50 値）, `fields[auditEvents]`, `limit`（≤1000）, `cursor`。
+📄 `auditEvents` のクエリ（DocC で確定）: `filter[startTimestamp]`（✅ 必須。無いと 400）/ `filter[endTimestamp]`（ISO8601）, `filter[actorId]`, `filter[subjectId]`, `filter[type]`（いずれも 1 値のみ。`type` は `AuditEventType` の 50 値。✅ API 2.6 追加値 `ROLE_UPDATED` を渡して 200 を確認、demo 2026-10-14）, `fields[auditEvents]`, `limit`（≤1000）, `cursor`。
 > 旧記載の snake_case 名（`start_timestamp` / `actor_id` / `event_type` 等）は ❓二次情報由来の誤りだったため訂正。
 
 ---
@@ -267,6 +267,7 @@ scope=<business.api | school.api>
 | `lockType` | String | **MDM / USER / NONE**（`isLocked` が true のときのロック種別。MDM＝デバイス管理サービス、USER＝個人の Apple Account） |
 
 クエリ `fields[activationLockStatus]`（`isLocked`, `lockType`）。組織が管理していないシリアルは 404。`OrgDevice.Relationships` に `activationLockStatus` が追加されている。
+✅ 実機（demo, 2026-10-14, `livetest`）: 管理下の実デバイスで `isLocked=false` / `lockType="NONE"` を取得、存在しないシリアル（`LIVETEST0000`）は 404（`IsNotFound`）。`MDM` / `USER` の観測はまだ無い。📄 Apple School Manager API でも 1.7 で同じエンドポイント（`api-school.apple.com/v1/orgDevices/{id}/activationLockStatus`）が提供される。
 📄 注記: デバイスが管理対象として無効な internal-only のロック状態を報告した場合、予期しないサーバーエラーで失敗することがある。SDK は `devices.ActivationLockStatus`。
 
 ### 4.6 Audit Event（`/v1/auditEvents`）

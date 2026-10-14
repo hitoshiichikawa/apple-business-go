@@ -3,7 +3,7 @@
 出典: `developer.apple.com/documentation/applebusinessapi`（JSレンダリングのため DocC データを取得して確認）。
 本書は開発時の参照用。型は JSON:API 表記、`!` は必須、`[T]` は配列、`byte` は Base64 エンコード文字列、`date-time` は ISO8601。
 
-カテゴリ件数（📄 API 2.6 時点、2026-10-08 確認）: Objects and Data Types 71 / Type Aliases 25 / Dictionaries 107（監査イベント機構 103 ＋ `ActivationLockStatus` / `ActivityTypeMetadata` / `MdmServerCreateRequest` / `MdmServerUpdateRequest`）。
+カテゴリ件数（📄 API 2.6 時点、2026-10-08 確認。2026-10-14 に全 310 ページを再取得して SDK のフィールド・列挙・エンドポイントと機械照合し、差分なしを確認）: Objects and Data Types 71 / Type Aliases 25 / Dictionaries 107（監査イベント機構 103 ＋ `ActivationLockStatus` / `ActivityTypeMetadata` / `MdmServerCreateRequest` / `MdmServerUpdateRequest`）。
 
 > **API 2.6 の差分（Apple Business リリースノート）**: 2026-09-16 に Activation Lock ステータス取得（`ActivationLockStatus` / `ActivationLockType`）、2026-09-23 に監査イベントの拡充（`AuditEventType` 33→50 種、`AuditEventIdpVendorName` / `AuditEventIdpProtocol` 新設、`AuditEventCategory` / `AuditEventSubjectType` に値追加）。DocC の「Introduced in 2.6」注記は既存型にも付くため、2.5 / 2.6 のどちらで入ったかの切り分けは ❓未確認。
 
@@ -96,6 +96,7 @@
 > `data.type`＝`activationLockStatus`、`data.id`＝デバイスのシリアル番号。組織が管理していないシリアルは 404。SDK は `devices.ActivationLockStatus`。
 > `OrgDevice.Relationships` にも `activationLockStatus` が追加された（`assignedServer` / `appleCareCoverage` と同列。relationships 専用エンドポイントは DocC に無い）。
 > 📄 注記: デバイスが管理対象として無効な internal-only のロック状態を報告した場合、予期しないサーバーエラーで失敗することがある。
+> ✅ 実機（demo, 2026-10-14, `livetest`）: 管理下デバイスで `isLocked=false` / `lockType="NONE"`、未管理シリアルは 404 を確認。📄 Apple School Manager API では 1.7 で提供。
 `isLocked`(boolean), `lockType`(ActivationLockType: `MDM` | `USER` | `NONE`。`isLocked` が true のときのロック種別)
 
 ### User.Attributes（`/v1/users`）
