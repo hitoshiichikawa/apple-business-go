@@ -153,13 +153,17 @@ func TestReads_SucceedOrPermission403(t *testing.T) {
 	read("apps.ListPackages", func(ctx context.Context) error { _, e := apps.New(c).ListPackages(ctx, small); return e })
 	read("configurations.List", func(ctx context.Context) error { _, e := configurations.New(c).List(ctx, small); return e })
 	read("blueprints.List", func(ctx context.Context) error { _, e := blueprints.New(c).List(ctx, small); return e })
+	// ListRange は links.next を最後まで辿るため、limit=1 だと 24h 分のイベント件数ぶん
+	// リクエストが発生し、429（Retry-After 60s）→ 90s のタイムアウトに至る（demo 2026-10-14 で観測）。
+	// 上限の limit=1000 にして通常 1 リクエストで収める。
+	auditQ := url.Values{"limit": {"1000"}}
 	read("auditevents.ListRange(24h)", func(ctx context.Context) error {
-		_, e := auditevents.New(c).ListRange(ctx, time.Now().Add(-24*time.Hour), time.Now(), small)
+		_, e := auditevents.New(c).ListRange(ctx, time.Now().Add(-24*time.Hour), time.Now(), auditQ)
 		return e
 	})
 	// API 2.6 で追加されたイベント種別を filter[type] に渡しても 400 にならないこと。
 	read("auditevents.ListRange(24h, filter[type]=ROLE_UPDATED)", func(ctx context.Context) error {
-		q := url.Values{"limit": {"1"}, "filter[type]": {auditevents.TypeRoleUpdated}}
+		q := url.Values{"limit": {"1000"}, "filter[type]": {auditevents.TypeRoleUpdated}}
 		_, e := auditevents.New(c).ListRange(ctx, time.Now().Add(-24*time.Hour), time.Now(), q)
 		return e
 	})
