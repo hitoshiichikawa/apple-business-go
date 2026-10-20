@@ -161,3 +161,224 @@ func TestListRangeDoesNotMutateQuery(t *testing.T) {
 		t.Fatalf("ListRange(nil q): %v", err)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Apple Business API 2.6（2026-09-23）で追加された監査イベント
+// ---------------------------------------------------------------------------
+
+// listOne は body を返すサーバから 1 件取得する。
+func listOne(t *testing.T, body string) AuditEvent {
+	t.Helper()
+	c := testutil.NewClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}))
+	events, err := New(c).ListRange(context.Background(), time.Now().Add(-time.Hour), time.Now(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("len = %d", len(events))
+	}
+	return events[0]
+}
+
+// eventJSON は共通エンベロープ + eventData<Event> の 1 件応答を組み立てる。
+func eventJSON(typ, category, subjectType, key, data string) string {
+	return `{"data":[{"type":"auditEvents","id":"E","attributes":{` +
+		`"eventDateTime":"2026-09-23T01:02:03.000Z","type":"` + typ + `",` +
+		`"category":"` + category + `","actorType":"USER","subjectType":"` + subjectType + `","outcome":"SUCCESS",` +
+		`"eventDataPropertyKey":"` + key + `","` + key + `":` + data +
+		`}}],"links":{},"meta":{}}`
+}
+
+func TestPayloadRoleUpdated(t *testing.T) {
+	ev := listOne(t, eventJSON(TypeRoleUpdated, CategoryAccessManagement, SubjectRole, "eventDataRoleUpdated",
+		`{"privilegesAdded":["DEVICE_READ","DEVICE_WRITE"],"privilegesRemoved":["USER_READ"]}`))
+	a := ev.Attributes
+	if a.Type != TypeRoleUpdated || a.Category != CategoryAccessManagement || a.SubjectType != SubjectRole ||
+		a.ActorType != ActorUser || a.Outcome != OutcomeSuccess {
+		t.Fatalf("envelope: %+v", a)
+	}
+	var p RoleUpdated
+	if err := a.Payload(&p); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.PrivilegesAdded) != 2 || p.PrivilegesAdded[1] != "DEVICE_WRITE" ||
+		len(p.PrivilegesRemoved) != 1 || p.PrivilegesRemoved[0] != "USER_READ" {
+		t.Fatalf("payload: %+v", p)
+	}
+}
+
+func TestPayloadRoleCreated(t *testing.T) {
+	ev := listOne(t, eventJSON(TypeRoleCreated, CategoryAccessManagement, SubjectRole, "eventDataRoleCreated",
+		`{"privileges":["DEVICE_READ"]}`))
+	var p RoleCreated
+	if err := ev.Attributes.Payload(&p); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Privileges) != 1 || p.Privileges[0] != "DEVICE_READ" {
+		t.Fatalf("payload: %+v", p)
+	}
+}
+
+func TestPayloadIDPCreated(t *testing.T) {
+	ev := listOne(t, eventJSON(TypeIDPCreated, CategoryAccessManagement, SubjectIDP, "eventDataIdpCreated",
+		`{"vendorName":"MICROSOFT_OIDC","protocol":"OIDC"}`))
+	if ev.Attributes.SubjectType != SubjectIDP {
+		t.Fatalf("subjectType = %q", ev.Attributes.SubjectType)
+	}
+	var p IDPCreated
+	if err := ev.Attributes.Payload(&p); err != nil {
+		t.Fatal(err)
+	}
+	if p.VendorName != IDPVendorMicrosoftOIDC || p.Protocol != IDPProtocolOIDC {
+		t.Fatalf("payload: %+v", p)
+	}
+}
+
+func TestPayloadIDPUpdatedAndDeletedShareShape(t *testing.T) {
+	for _, tc := range []struct{ typ, key string }{
+		{TypeIDPUpdated, "eventDataIdpUpdated"},
+		{TypeIDPDeleted, "eventDataIdpDeleted"},
+	} {
+		ev := listOne(t, eventJSON(tc.typ, CategoryAccessManagement, SubjectIDP, tc.key, `{"vendorName":"GENERIC_IDP"}`))
+		var p IDP
+		if err := ev.Attributes.Payload(&p); err != nil {
+			t.Fatalf("%s: %v", tc.typ, err)
+		}
+		if p.VendorName != IDPVendorGenericIDP {
+			t.Fatalf("%s: payload %+v", tc.typ, p)
+		}
+	}
+}
+
+func TestPayloadIDPAccountSync(t *testing.T) {
+	ev := listOne(t, eventJSON(TypeIDPAccountSyncEnabled, CategoryAccessManagement, SubjectIDP, "eventDataIdpAccountSyncEnabled",
+		`{"vendorName":"GOOGLE","activityId":"A-100"}`))
+	var p IDPAccountSync
+	if err := ev.Attributes.Payload(&p); err != nil {
+		t.Fatal(err)
+	}
+	if p.VendorName != IDPVendorGoogle || p.ActivityID != "A-100" {
+		t.Fatalf("payload: %+v", p)
+	}
+}
+
+func TestPayloadDomainFederationEnabled(t *testing.T) {
+	ev := listOne(t, eventJSON(TypeDomainFederationEnabled, CategoryOrganization, SubjectDomain, "eventDataDomainFederationEnabled",
+		`{"activityId":"A-1","scimActivityId":"S-1"}`))
+	var p DomainFederationEnabled
+	if err := ev.Attributes.Payload(&p); err != nil {
+		t.Fatal(err)
+	}
+	if p.ActivityID != "A-1" || p.ScimActivityID != "S-1" {
+		t.Fatalf("payload: %+v", p)
+	}
+}
+
+func TestPayloadActivityIDOnlyEvents(t *testing.T) {
+	// activityId だけを持つ 3 種（DOMAIN_FEDERATION_DISABLED / BATCH_PASSWORD_RESET_INITIATED / ACCOUNT_PASSWORD_CHANGED）。
+	ev := listOne(t, eventJSON(TypeDomainFederationDisabled, CategoryOrganization, SubjectDomain, "eventDataDomainFederationDisabled", `{"activityId":"A-2"}`))
+	var d DomainFederationDisabled
+	if err := ev.Attributes.Payload(&d); err != nil || d.ActivityID != "A-2" {
+		t.Fatalf("DomainFederationDisabled: %+v %v", d, err)
+	}
+	ev = listOne(t, eventJSON(TypeBatchPasswordResetInitiated, CategoryAccountActivity, SubjectOrganization, "eventDataBatchPasswordResetInitiated", `{"activityId":"A-3"}`))
+	var b BatchPasswordResetInitiated
+	if err := ev.Attributes.Payload(&b); err != nil || b.ActivityID != "A-3" {
+		t.Fatalf("BatchPasswordResetInitiated: %+v %v", b, err)
+	}
+	ev = listOne(t, eventJSON(TypeAccountPasswordChanged, CategoryAccountActivity, SubjectUser, "eventDataAccountPasswordChanged", `{"activityId":"A-4"}`))
+	var c AccountPasswordChanged
+	if err := ev.Attributes.Payload(&c); err != nil || c.ActivityID != "A-4" {
+		t.Fatalf("AccountPasswordChanged: %+v %v", c, err)
+	}
+}
+
+func TestPayloadTermsAccepted(t *testing.T) {
+	ev := listOne(t, eventJSON(TypeTermsAccepted, CategoryOrganization, SubjectOrganization, "eventDataTermsAccepted", `{"termsName":"Apple Business Manager Agreement"}`))
+	var p TermsAccepted
+	if err := ev.Attributes.Payload(&p); err != nil {
+		t.Fatal(err)
+	}
+	if p.TermsName != "Apple Business Manager Agreement" {
+		t.Fatalf("payload: %+v", p)
+	}
+}
+
+func TestPayloadAppleServicesSettingsUpdated(t *testing.T) {
+	ev := listOne(t, eventJSON(TypeAppleServicesSettingsUpdated, CategoryOrganization, SubjectOrganization, "eventDataAppleServicesSettingsUpdated",
+		`{"settingsEnabled":["ICLOUD_DRIVE"],"settingsDisabled":["MESSAGES","FACETIME"]}`))
+	var p AppleServicesSettingsUpdated
+	if err := ev.Attributes.Payload(&p); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.SettingsEnabled) != 1 || p.SettingsEnabled[0] != "ICLOUD_DRIVE" || len(p.SettingsDisabled) != 2 {
+		t.Fatalf("payload: %+v", p)
+	}
+}
+
+func TestPayloadEmptyEventData(t *testing.T) {
+	// フィールドを持たないイベント（EXTERNAL_ACCOUNT_INVITED / ACCOUNT_IMAGE_*）は eventData が空オブジェクト。
+	ev := listOne(t, eventJSON(TypeAccountImageSet, CategoryAccountActivity, SubjectUser, "eventDataAccountImageSet", `{}`))
+	if _, ok := ev.Attributes.EventData["eventDataAccountImageSet"]; !ok {
+		t.Fatalf("eventData key should be collected: %v", ev.Attributes.EventData)
+	}
+	var p struct{}
+	if err := ev.Attributes.Payload(&p); err != nil {
+		t.Fatalf("Payload on empty object: %v", err)
+	}
+	ev = listOne(t, eventJSON(TypeExternalAccountInvited, CategoryAccountActivity, SubjectInvitation, "eventDataExternalAccountInvited", `{}`))
+	if ev.Attributes.Type != TypeExternalAccountInvited || ev.Attributes.SubjectType != SubjectInvitation {
+		t.Fatalf("envelope: %+v", ev.Attributes)
+	}
+}
+
+func TestListRangePassesTypeFilter(t *testing.T) {
+	var gotType string
+	c := testutil.NewClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotType = r.URL.Query().Get("filter[type]")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}))
+	q := url.Values{"filter[type]": {TypeIDPCreated}}
+	if _, err := New(c).ListRange(context.Background(), time.Now().Add(-time.Hour), time.Now(), q); err != nil {
+		t.Fatal(err)
+	}
+	if gotType != TypeIDPCreated {
+		t.Fatalf("filter[type] = %q", gotType)
+	}
+}
+
+// 50 種の Type* 定数が重複なく揃っていること（DocC の AuditEventType と同数）。
+func TestTypeConstantsAreUniqueAndComplete(t *testing.T) {
+	all := []string{
+		TypeDeviceAddedToOrg, TypeDeviceRemovedFromOrg, TypeDeviceAssignedToServer, TypeDeviceUnassignedFromServer,
+		TypeSubjectHasICloudStoragePurchaseAdded, TypeSubjectHasICloudStoragePurchaseRemoved,
+		TypeSubjectHasAppleCarePurchaseAdded, TypeSubjectHasAppleCarePurchaseRemoved, TypeDeviceIsErased,
+		TypeConfigSettingsCreated, TypeConfigSettingsUpdated, TypeConfigSettingsDeleted,
+		TypeCollectionCreated, TypeCollectionUpdated, TypeCollectionDeleted,
+		TypeSubscriptionCreated, TypeSubscriptionUpdated, TypeSubscriptionDeleted,
+		TypeAccountRoleLocationChanged, TypeAccountAdded, TypeAccountDeleted,
+		TypeExternalAccountAssociated, TypeExternalAccountDisassociated,
+		TypeDomainAdded, TypeDomainRemoved, TypeDomainVerified,
+		TypeAPIAccountCreatedWithKey, TypeAPIAccountCreatedWithoutKey, TypeAPIAccountDeleted,
+		TypeAPIAccountKeyRevoked, TypeAPIAccountKeyGenerated, TypeAPIAccountRoleLocationChanged, TypeAPIAccountNameChanged,
+		// API 2.6
+		TypeRoleCreated, TypeRoleUpdated, TypeTermsAccepted, TypeDomainFederationEnabled, TypeDomainFederationDisabled,
+		TypeBatchPasswordResetInitiated, TypeExternalAccountInvited, TypeAccountImageSet, TypeAccountImageReplaced,
+		TypeAccountImageRemoved, TypeIDPCreated, TypeIDPUpdated, TypeIDPDeleted, TypeIDPAccountSyncEnabled,
+		TypeIDPAccountSyncDisabled, TypeAppleServicesSettingsUpdated, TypeAccountPasswordChanged,
+	}
+	if len(all) != 50 {
+		t.Fatalf("len = %d, want 50", len(all))
+	}
+	seen := make(map[string]bool, len(all))
+	for _, v := range all {
+		if v == "" || seen[v] {
+			t.Fatalf("empty or duplicate value %q", v)
+		}
+		seen[v] = true
+	}
+}

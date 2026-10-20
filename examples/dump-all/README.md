@@ -23,14 +23,15 @@ go run ./examples/dump-all -json > dump.json  # 機械可読(JSON配列)で保�
 - 出力されるトークンは先頭8文字のみマスク表示。`.pem`・トークンはコミット/共有しないでください。
 
 ## 叩く順番（GETのみ）
-1. **Devices**: `/v1/orgDevices` → `/v1/orgDevices/{id}` → `/assignedServer` → `/appleCareCoverage`
+1. **Devices**: `/v1/orgDevices` → `/v1/orgDevices/{id}` → `/assignedServer` → `/appleCareCoverage` → `/activationLockStatus`（API 2.6）
 2. **Device Management Services**: `/v1/mdmServers` → `/v1/mdmServers/{id}` → `/relationships/devices`
 3. **Users**: `/v1/users` → `/v1/users/{id}`
 4. **UserGroups**: `/v1/userGroups` → `/v1/userGroups/{id}` → `/relationships/users`
 5. **Apps / Packages**: `/v1/apps`(→`/{id}`) / `/v1/packages`(→`/{id}`)
 6. **Blueprints**: `/v1/blueprints` → `/v1/blueprints/{id}` → `/relationships/{orgDevices,userGroups,users,apps,configurations,packages}`
 7. **Configurations**: `/v1/configurations` → `/v1/configurations/{id}`
-8. **Audit Events**: `/v1/auditEvents`（**`filter[startTimestamp]` が必須**のため、直近 `-audit-days` 日分を自動付与）
+8. **Organizational Units**: `/v1/organizationalUnits` → `/v1/organizationalUnits/{id}` → `/relationships/users`（API 2.2）
+9. **Audit Events**: `/v1/auditEvents`（**`filter[startTimestamp]` が必須**のため、直近 `-audit-days` 日分を自動付与）
 
 ## フラグ
 | フラグ | 既定 | 説明 |

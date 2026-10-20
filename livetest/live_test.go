@@ -121,6 +121,29 @@ func TestReads_SucceedOrPermission403(t *testing.T) {
 		})
 	}
 	read("devices.List", func(ctx context.Context) error { _, e := devices.New(c).List(ctx, small); return e })
+	// Activation Lock ステータス（API 2.6、2026-09-16 追加）。観測値は -v で記録する。
+	t.Run("devices.ActivationLockStatus(first device)", func(t *testing.T) {
+		ctx := ctxFor(t)
+		list, err := devices.New(c).List(ctx, small)
+		switch {
+		case applebusiness.IsForbidden(err):
+			t.Logf("devices.List: 403 (permission) — %v", err)
+			return
+		case err != nil:
+			t.Fatalf("devices.List: %v", err)
+		case len(list) == 0:
+			t.Skip("no devices in the organization")
+		}
+		st, err := devices.New(c).ActivationLockStatus(ctx, list[0].ID)
+		switch {
+		case err == nil:
+			t.Logf("activationLockStatus(%s): isLocked=%v lockType=%q", list[0].ID, st.Attributes.IsLocked, st.Attributes.LockType)
+		case applebusiness.IsForbidden(err):
+			t.Logf("devices.ActivationLockStatus: 403 (permission) — %v", err)
+		default:
+			t.Fatalf("devices.ActivationLockStatus: %v", err)
+		}
+	})
 	read("devices.ListMdmServers", func(ctx context.Context) error { _, e := devices.New(c).ListMdmServers(ctx, small); return e })
 	read("devices.ListMdmDevices", func(ctx context.Context) error { _, e := devices.New(c).ListMdmDevices(ctx, small); return e })
 	read("people.ListUsers", func(ctx context.Context) error { _, e := people.New(c).ListUsers(ctx, small); return e })
@@ -130,8 +153,18 @@ func TestReads_SucceedOrPermission403(t *testing.T) {
 	read("apps.ListPackages", func(ctx context.Context) error { _, e := apps.New(c).ListPackages(ctx, small); return e })
 	read("configurations.List", func(ctx context.Context) error { _, e := configurations.New(c).List(ctx, small); return e })
 	read("blueprints.List", func(ctx context.Context) error { _, e := blueprints.New(c).List(ctx, small); return e })
+	// ListRange は links.next を最後まで辿るため、limit=1 だと 24h 分のイベント件数ぶん
+	// リクエストが発生し、429（Retry-After 60s）→ 90s のタイムアウトに至る（demo 2026-10-14 で観測）。
+	// 上限の limit=1000 にして通常 1 リクエストで収める。
+	auditQ := url.Values{"limit": {"1000"}}
 	read("auditevents.ListRange(24h)", func(ctx context.Context) error {
-		_, e := auditevents.New(c).ListRange(ctx, time.Now().Add(-24*time.Hour), time.Now(), small)
+		_, e := auditevents.New(c).ListRange(ctx, time.Now().Add(-24*time.Hour), time.Now(), auditQ)
+		return e
+	})
+	// API 2.6 で追加されたイベント種別を filter[type] に渡しても 400 にならないこと。
+	read("auditevents.ListRange(24h, filter[type]=ROLE_UPDATED)", func(ctx context.Context) error {
+		q := url.Values{"limit": {"1000"}, "filter[type]": {auditevents.TypeRoleUpdated}}
+		_, e := auditevents.New(c).ListRange(ctx, time.Now().Add(-24*time.Hour), time.Now(), q)
 		return e
 	})
 }
@@ -150,6 +183,13 @@ func TestGet_BogusID_IsNotFound(t *testing.T) {
 	})
 	t.Run("blueprints.Get bogus → 404", func(t *testing.T) {
 		_, err := blueprints.New(c).Get(ctxFor(t), "livetest-nonexistent-0000")
+		if !applebusiness.IsNotFound(err) {
+			t.Fatalf("want 404 IsNotFound, got %v", err)
+		}
+	})
+	// 📄 DocC: 組織が管理していないシリアルは 404。
+	t.Run("devices.ActivationLockStatus bogus → 404", func(t *testing.T) {
+		_, err := devices.New(c).ActivationLockStatus(ctxFor(t), "LIVETEST0000")
 		if !applebusiness.IsNotFound(err) {
 			t.Fatalf("want 404 IsNotFound, got %v", err)
 		}

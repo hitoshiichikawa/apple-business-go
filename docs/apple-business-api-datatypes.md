@@ -3,11 +3,13 @@
 出典: `developer.apple.com/documentation/applebusinessapi`（JSレンダリングのため DocC データを取得して確認）。
 本書は開発時の参照用。型は JSON:API 表記、`!` は必須、`[T]` は配列、`byte` は Base64 エンコード文字列、`date-time` は ISO8601。
 
-カテゴリ件数: Objects and Data Types 67 / Type Aliases 21 / Dictionaries 69（＝監査イベント機構）。
+カテゴリ件数（📄 API 2.6 時点、2026-10-08 確認。2026-10-14 に全 310 ページを再取得して SDK のフィールド・列挙・エンドポイントと機械照合し、差分なしを確認）: Objects and Data Types 71 / Type Aliases 25 / Dictionaries 107（監査イベント機構 103 ＋ `ActivationLockStatus` / `ActivityTypeMetadata` / `MdmServerCreateRequest` / `MdmServerUpdateRequest`）。
+
+> **API 2.6 の差分（Apple Business リリースノート）**: 2026-09-16 に Activation Lock ステータス取得（`ActivationLockStatus` / `ActivationLockType`）、2026-09-23 に監査イベントの拡充（`AuditEventType` 33→50 種、`AuditEventIdpVendorName` / `AuditEventIdpProtocol` 新設、`AuditEventCategory` / `AuditEventSubjectType` に値追加）。DocC の「Introduced in 2.6」注記は既存型にも付くため、2.5 / 2.6 のどちらで入ったかの切り分けは ❓未確認。
 
 ---
 
-## 1. Type Aliases（列挙値）— 21件
+## 1. Type Aliases（列挙値）— 25件
 
 | 型 | 値 |
 |---|---|
@@ -26,13 +28,16 @@
 | `DeviceEraseStatus` | `NOT_ERASED`, `ERASED` |
 | `DeviceLockStatus` | `LOCKED`, `UNLOCKED` |
 | `LostModeStatus` | `ENABLED`, `DISABLED` |
+| `ActivationLockType`（API 2.6+） | `MDM`（デバイス管理サービスによるロック）, `USER`（個人の Apple Account へのロック）, `NONE`（未ロック） |
 | `AuditEventActorType` | `USER`, `API_USER`, `SYSTEM` |
-| `AuditEventSubjectType` | `ORGANIZATION`, `USER`, `LOCATION`, `DEVICE`, `COLLECTION`, `DEVICE_MANAGEMENT_SETTING`, `SUBSCRIPTION`, `DOMAIN`, `API_USER` |
-| `AuditEventCategory` | `ORGANIZATION`, `ACCOUNT_ACTIVITY`, `DEVICE_INVENTORY`, `PURCHASING`, `DEVICE_MANAGEMENT` |
+| `AuditEventSubjectType` | `ORGANIZATION`, `USER`, `LOCATION`, `DEVICE`, `COLLECTION`, `DEVICE_MANAGEMENT_SETTING`, `SUBSCRIPTION`, `DOMAIN`, `API_USER`, `ROLE`（API 2.6+）, `IDP`（API 2.6+）, `INVITATION`（API 2.6+） |
+| `AuditEventCategory` | `ORGANIZATION`, `ACCOUNT_ACTIVITY`, `DEVICE_INVENTORY`, `PURCHASING`, `DEVICE_MANAGEMENT`, `ACCESS_MANAGEMENT`（API 2.6+）。※ ✅ 実機は `DEVICE_ASSIGNED_TO_SERVER` で DocC に無い `DEVICE_ACTIVITY` を返した（2026-06 観測）。未知の値を前提に扱うこと |
 | `AuditEventOutcome` | `SUCCESS`, `FAILURE` |
 | `AuditEventPurchaseSourceType` | `APPLE`, `MANUALLY_ADDED`, `RESELLER` |
 | `AuditEventReleaseEntityType` | `USER`, `MDM`, `RESELLER`, `API`, `REPLACEMENT` |
-| `AuditEventType` | §4.2 を参照（33種） |
+| `AuditEventIdpVendorName`（API 2.6+） | `GOOGLE`, `MICROSOFT`, `MICROSOFT_OIDC`（OpenID Connect の Microsoft）, `GENERIC_IDP`（汎用/カスタム IdP） |
+| `AuditEventIdpProtocol`（API 2.6+） | `OIDC`, `SAML` |
+| `AuditEventType` | §4.2 を参照（50種。API 2.6 で 17 種追加） |
 
 ---
 
@@ -88,6 +93,14 @@
 > ✅ 実機（2026-10-20）: `agreementNumber` と `contractCancelDateTime` は **null になりうる**（SDK の `AppleCareCoverageAttributes` では空文字列に落ちる）。
 > 要素の `id` は契約番号（`agreementNumber` と同じ値）かシリアル番号。`GET /v1/orgDevices/{id}/appleCareCoverage` の応答は単体ではなく `data` が配列の一覧型（`meta.paging.limit` 100）。
 
+### ActivationLockStatus.Attributes（`/v1/orgDevices/{id}/activationLockStatus`、API 2.6）
+> 📄 **API 2.6（2026-09-16）で追加**。`GET /v1/orgDevices/{id}/activationLockStatus`（クエリ: `fields[activationLockStatus]`＝`isLocked`, `lockType`）→ `ActivationLockStatusResponse`。
+> `data.type`＝`activationLockStatus`、`data.id`＝デバイスのシリアル番号。組織が管理していないシリアルは 404。SDK は `devices.ActivationLockStatus`。
+> `OrgDevice.Relationships` にも `activationLockStatus` が追加された（`assignedServer` / `appleCareCoverage` と同列。relationships 専用エンドポイントは DocC に無い）。
+> 📄 注記: デバイスが管理対象として無効な internal-only のロック状態を報告した場合、予期しないサーバーエラーで失敗することがある。
+> ✅ 実機（demo, 2026-10-14, `livetest`）: 管理下デバイスで `isLocked=false` / `lockType="NONE"`、未管理シリアルは 404 を確認。📄 Apple School Manager API では 1.7 で提供。
+`isLocked`(boolean), `lockType`(ActivationLockType: `MDM` | `USER` | `NONE`。`isLocked` が true のときのロック種別)
+
 ### User.Attributes（`/v1/users`）
 `firstName`(string), `middleName`(string), `lastName`(string), `status`(UserStatus), `managedAppleAccount`(string),
 `isExternalUser`(boolean), `roleOuList`([UserRoleOuMapping]), `email`(string), `employeeNumber`(string),
@@ -133,7 +146,7 @@
 
 ### リソースオブジェクト
 `OrgDevice` / `MdmDevice` / `MdmDeviceDetail` / `MdmServer` / `OrgDeviceActivity` / `AppleCareCoverage` /
-`User` / `UserGroup` / `App` / `Package` / `Blueprint` / `Configuration`
+`ActivationLockStatus`（API 2.6） / `User` / `UserGroup` / `OrganizationalUnit`（API 2.2） / `App` / `Package` / `Blueprint` / `Configuration`
 各 `{ type!, id!, attributes, links(ResourceLinks), relationships? }`。
 
 ### リクエストボディ
@@ -150,8 +163,9 @@
 - リンク（リレーション）: `*LinkagesResponse` / `OrgDeviceAssignedServerLinkageResponse`
 - 該当: `OrgDeviceResponse`, `OrgDevicesResponse`, `MdmDeviceResponse`, `MdmDevicesResponse`, `MdmDeviceDetailResponse`,
   `MdmServerResponse`, `MdmServersResponse`, `MdmServerDevicesLinkagesResponse`, `OrgDeviceActivityResponse`,
-  `AppleCareCoverageResponse`, `UserResponse`, `UsersResponse`, `UserGroupResponse`, `UserGroupsResponse`,
-  `UserGroupUsersLinkagesResponse`, `AppResponse`, `AppsResponse`, `PackageResponse`, `PackagesResponse`,
+  `AppleCareCoverageResponse`, `ActivationLockStatusResponse`（API 2.6）, `UserResponse`, `UsersResponse`, `UserGroupResponse`, `UserGroupsResponse`,
+  `UserGroupUsersLinkagesResponse`, `OrganizationalUnitResponse`, `OrganizationalUnitsResponse`, `OrganizationalUnitUsersLinkagesResponse`（API 2.2）,
+  `AppResponse`, `AppsResponse`, `PackageResponse`, `PackagesResponse`,
   `BlueprintResponse`, `BlueprintsResponse`, `Blueprint*LinkagesResponse`, `ConfigurationResponse`, `ConfigurationsResponse`
 
 ### 共通（リンク / ページング / エラー）
@@ -166,7 +180,8 @@
 
 ## 4. Audit Events（`/v1/auditEvents`）
 
-> **クエリ（必須）**: `filter[startTimestamp]` が必須（未指定だと 400 `PARAMETER_ERROR.REQUIRED`）。通常は `filter[endTimestamp]` と併用し、いずれも ISO8601(RFC3339, UTC)。SDK は `auditevents.ListRange(start, end, q)` で付与。
+> **クエリ（必須）**: `filter[startTimestamp]` が必須（✅ 未指定だと 400 `PARAMETER_ERROR.REQUIRED`）。通常は `filter[endTimestamp]` と併用し、いずれも ISO8601(RFC3339, UTC)。SDK は `auditevents.ListRange(start, end, q)` で付与。
+> 📄 その他のクエリ（DocC）: `filter[actorId]` / `filter[subjectId]` / `filter[type]`（いずれも **1 値のみ**。`filter[type]` は `AuditEventType` の値）、`fields[auditEvents]`（共通項目名と `eventData<Event>` キー名）、`limit`（≤1000）、`cursor`。
 
 「Dictionaries」69件はすべて監査イベント機構（基底 `AuditEvent` + 各 `AuditEvent<Event>Attributes` ラッパー + 各 `AuditEvent<Event>` ペイロード）。
 
@@ -183,7 +198,7 @@ attributes = AuditEventCommonAttributes（共通）+ eventData<Event>（イベ�
 
 > `eventDataPropertyKey` が、その時の `attributes` 内に入るイベント固有データのキー名を示す（例 `eventDataDeviceAssignedToServer`）。
 
-### 4.2 AuditEventType（33種）
+### 4.2 AuditEventType（50種）
 `DEVICE_ADDED_TO_ORG`, `DEVICE_REMOVED_FROM_ORG`, `DEVICE_ASSIGNED_TO_SERVER`, `DEVICE_UNASSIGNED_FROM_SERVER`,
 `SUBJECT_HAS_ICLOUD_STORAGE_PURCHASE_ADDED`, `SUBJECT_HAS_ICLOUD_STORAGE_PURCHASE_REMOVED`,
 `SUBJECT_HAS_APPLECARE_PURCHASE_ADDED`, `SUBJECT_HAS_APPLECARE_PURCHASE_REMOVED`, `DEVICE_IS_ERASED`,
@@ -195,6 +210,12 @@ attributes = AuditEventCommonAttributes（共通）+ eventData<Event>（イベ�
 `DOMAIN_ADDED`, `DOMAIN_REMOVED`, `DOMAIN_VERIFIED`,
 `API_ACCOUNT_CREATED_WITH_KEY`, `API_ACCOUNT_CREATED_WITHOUT_KEY`, `API_ACCOUNT_DELETED`,
 `API_ACCOUNT_KEY_REVOKED`, `API_ACCOUNT_KEY_GENERATED`, `API_ACCOUNT_ROLE_LOCATION_CHANGED`, `API_ACCOUNT_NAME_CHANGED`
+
+**📄 API 2.6（2026-09-23）で追加された 17 種**:
+`ROLE_CREATED`, `ROLE_UPDATED`, `TERMS_ACCEPTED`, `DOMAIN_FEDERATION_ENABLED`, `DOMAIN_FEDERATION_DISABLED`,
+`BATCH_PASSWORD_RESET_INITIATED`, `EXTERNAL_ACCOUNT_INVITED`, `ACCOUNT_IMAGE_SET`, `ACCOUNT_IMAGE_REPLACED`, `ACCOUNT_IMAGE_REMOVED`,
+`IDP_CREATED`, `IDP_UPDATED`, `IDP_DELETED`, `IDP_ACCOUNT_SYNC_ENABLED`, `IDP_ACCOUNT_SYNC_DISABLED`,
+`APPLE_SERVICES_SETTINGS_UPDATED`, `ACCOUNT_PASSWORD_CHANGED`
 
 ### 4.3 イベント固有ペイロード（フィールドを持つもの）
 | eventData 型 | フィールド |
@@ -213,10 +234,21 @@ attributes = AuditEventCommonAttributes（共通）+ eventData<Event>（イベ�
 | `AuditEventApiAccountCreatedWithKey` / `KeyGenerated` / `KeyRevoked` | `keyId` |
 | `AuditEventApiAccountNameChanged` | `newName` |
 | `AuditEventAccountRoleLocation`（補助） | `roleName`, `locationUniqueIdentifier` |
+| `AuditEventRoleCreated`（API 2.6+） | `privileges`([string]) |
+| `AuditEventRoleUpdated`（API 2.6+） | `privilegesAdded`([string]), `privilegesRemoved`([string]) |
+| `AuditEventTermsAccepted`（API 2.6+） | `termsName` |
+| `AuditEventDomainFederationEnabled`（API 2.6+） | `activityId`, `scimActivityId` |
+| `AuditEventDomainFederationDisabled`（API 2.6+） | `activityId` |
+| `AuditEventBatchPasswordResetInitiated`（API 2.6+） | `activityId` |
+| `AuditEventAccountPasswordChanged`（API 2.6+） | `activityId` |
+| `AuditEventIdpCreated`（API 2.6+） | `vendorName`(AuditEventIdpVendorName), `protocol`(AuditEventIdpProtocol) |
+| `AuditEventIdpUpdated` / `AuditEventIdpDeleted`（API 2.6+） | `vendorName`(AuditEventIdpVendorName) |
+| `AuditEventIdpAccountSyncEnabled` / `AuditEventIdpAccountSyncDisabled`（API 2.6+） | `vendorName`(AuditEventIdpVendorName), `activityId` |
+| `AuditEventAppleServicesSettingsUpdated`（API 2.6+） | `settingsEnabled`([string]), `settingsDisabled`([string]) |
 
-> 上記以外（`DEVICE_IS_ERASED`, `ACCOUNT_ADDED/DELETED`, `EXTERNAL_ACCOUNT_*`, `DOMAIN_*`, `API_ACCOUNT_CREATED_WITHOUT_KEY/DELETED` 等）は eventData にフィールドを持たない（空）か、共通項目のみ。
+> 上記以外（`DEVICE_IS_ERASED`, `ACCOUNT_ADDED/DELETED`, `EXTERNAL_ACCOUNT_ASSOCIATED/DISASSOCIATED/INVITED`, `DOMAIN_ADDED/REMOVED/VERIFIED`, `API_ACCOUNT_CREATED_WITHOUT_KEY/DELETED`, `ACCOUNT_IMAGE_SET/REPLACED/REMOVED` 等）は eventData にフィールドを持たない（空オブジェクト）か、共通項目のみ（📄 2026-10-08 に DocC で再確認）。
 
-> SDK 対応: 上記フィールドありペイロードはすべて `auditevents` パッケージに型付け済み（`Payload(&v)` でデコード）。`AuditEventType` も全33種を定数化。
+> SDK 対応: 上記フィールドありペイロードはすべて `auditevents` パッケージに型付け済み（`Payload(&v)` でデコード。API 2.6 分は `RoleCreated` / `RoleUpdated` / `TermsAccepted` / `DomainFederationEnabled` / `DomainFederationDisabled` / `BatchPasswordResetInitiated` / `AccountPasswordChanged` / `IDPCreated` / `IDP` / `IDPAccountSync` / `AppleServicesSettingsUpdated`）。`AuditEventType` も全 50 種を `Type*` 定数化。`Category*` / `Subject*` / `Actor*` / `Outcome*` / `IDPVendor*` / `IDPProtocol*` の定数もある。
 
 ---
 

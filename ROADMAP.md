@@ -31,13 +31,13 @@ flowchart LR
 | 区分 | 項目 | 状態 |
 |---|---|---|
 | `applebusiness` | OAuth2（ES256 JWT）/ リトライ / ページング / JSON:API / 汎用ヘルパ（List/Get/Relationship/Create/Update/Delete/ModifyRelationship） | ✅ |
-| `devices` | orgDevices / mdmServers（CRUD、API 2.1） / appleCareCoverage / 割り当て・解除アクティビティ / MDM移行アクティビティ（API 2.3） / リリースアクティビティ（API 2.4） / mdmDevices（一覧・詳細） | ✅ |
+| `devices` | orgDevices / mdmServers（CRUD、API 2.1） / appleCareCoverage / 割り当て・解除アクティビティ / MDM移行アクティビティ（API 2.3） / リリースアクティビティ（API 2.4） / mdmDevices（一覧・詳細） / Activation Lock ステータス（API 2.6） | ✅ |
 | `people` | users / userGroups | ✅ |
 | `orgunits` | organizationalUnits（一覧・単体・所属ユーザー、読み取り、API 2.2） | ✅ |
 | `apps` | apps / packages（読み取り） | ✅ |
 | `blueprints` | CRUD + リレーション操作（add=POST / remove=DELETE / replace=PATCH） | ✅ |
 | `configurations` | CRUD（CUSTOM_SETTING、`configurationProfile`=Base64） | ✅ |
-| `auditevents` | List（共通エンベロープ + `eventData` + `Payload`、主要イベント型同梱） | ✅ |
+| `auditevents` | List（共通エンベロープ + `eventData` + `Payload`。全 50 種の `Type*` 定数（API 2.6）とフィールド付きペイロード型を同梱） | ✅ |
 | データ型 | 全フィールド・列挙値・監査モデルを公式 DocC で確認し、`docs/apple-business-api-datatypes.md` に集約。各 `Attributes` をこれに一致 | ✅ |
 | その他 | examples / CI 雛形 / `docs/dev/CLAUDE.md` / `ROADMAP.md` / `docs/dev/CLAUDE_CODE_PROMPT.md` / `v0.1.0` タグ | ✅ |
 
@@ -51,7 +51,7 @@ flowchart LR
 - [ ] `go mod tidy`（`go.sum` 生成）/ `go build ./...` / `go vet ./...` / `gofmt -l .` を緑に
 - [x] コアの単体テスト（`applebusiness/client_test.go`、`httptest`）: トークン交換 / GET / ページング / `ListSeq` / Create・Update・Delete / relationship / エラーデコード / 429リトライ / 型付き判定
 - [x] 各ドメインパッケージの単体テスト（devices: 読み取り+activities, people, apps, blueprints: CRUD+relationship, configurations: CRUD, auditevents: ListRange+Payload）
-- [x] `auditEvents` 全 `eventData` 型付け + `AuditEventType` 定数33種
+- [x] `auditEvents` 全 `eventData` 型付け + `AuditEventType` 定数 50 種（API 2.6 で 17 種追加）
 - [x] `examples/write-test`（全書き込みAPIの安全な動作確認CLI）
   - 書き込みボディ（`activityType`、`{data:[{type,id}]}`、`customSettingsValues`）
   - `auditevents` の `UnmarshalJSON`（共通項目 + `eventData*` 収集）/ `Payload`
@@ -61,7 +61,7 @@ flowchart LR
 | パッケージ | 内容 | 状態 |
 |---|---|---|
 | `applebusiness` | コア（認証/通信/ページング/リトライ/汎用ヘルパ） | 実装済み |
-| `devices` | orgDevices / mdmServers（CRUD、API 2.1） / appleCareCoverage / activities（割り当て・解除） / mdmDevices（一覧・詳細） | 実装済み |
+| `devices` | orgDevices / mdmServers（CRUD、API 2.1） / appleCareCoverage / activationLockStatus（API 2.6） / activities（割り当て・解除・MDM移行・リリース） / mdmDevices（一覧・詳細） | 実装済み |
 | `people` | users / userGroups | 実装済み |
 | `orgunits` | organizationalUnits（読み取り、API 2.2） | 実装済み |
 | `apps` | apps / packages（読み取り） | 実装済み |
@@ -103,7 +103,7 @@ Configurations はセキュリティ/ネットワーク等の設定単位、Blue
 - [ ] トークン/assertion の永続キャッシュ用インタフェース（既定メモリ、差し替え可能）
 
 ### 3.5 任意の拡張
-- [ ] 監査イベントの残り `eventData` 型（全33種のうち未型付け分。datatypes.md §4.3 準拠）
+- [x] 監査イベントの `eventData` 型（全 50 種のうちフィールドを持つものはすべて型付け済み。API 2.6 の 17 種を含む。datatypes.md §4.3 準拠）
 - [x] `MdmDevice` / `MdmDeviceDetail` のエンドポイント配線: `GET /v1/mdmDevices`（`ListMdmDevices`）/ `GET /v1/mdmDevices/{id}/details`（`MdmDeviceDetails`）。
   公式 DocC で確定（API v2.0 で追加）。旧推測の `/v1/mdmServers/{id}/devices` というエンドポイントは存在しない
 - [ ] `brand`（旧 Apple Business Connect）パッケージ（将来）。実在するが **公開仕様（エンドポイント/データ型/DocC）が無い**。認証も device API と別系統（Service Account ＋ Partner Organization 委譲、Organization/Marketing Administrator ロール）。実装には Onboarding Guide の入手か、委譲設定済み組織での実機確定が前提（2026-06 調査。参考: support.apple.com/guide/business/brands-api-access-abcb4226f877/web）

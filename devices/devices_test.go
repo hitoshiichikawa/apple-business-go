@@ -25,6 +25,11 @@ func devicesHandler(t *testing.T) http.HandlerFunc {
 			testutil.WriteJSON(t, w, http.StatusOK, applebusiness.SingleResponse[MdmServerAttributes]{
 				Data: applebusiness.ResourceObject[MdmServerAttributes]{Type: "mdmServers", ID: "S1", Attributes: MdmServerAttributes{ServerName: "Server-1", ServerType: "MDM"}},
 			})
+		case strings.HasSuffix(p, "/activationLockStatus") && r.Method == http.MethodGet:
+			id := strings.TrimSuffix(strings.TrimPrefix(p, "/v1/orgDevices/"), "/activationLockStatus")
+			testutil.WriteJSON(t, w, http.StatusOK, applebusiness.SingleResponse[ActivationLockStatusAttributes]{
+				Data: applebusiness.ResourceObject[ActivationLockStatusAttributes]{Type: "activationLockStatus", ID: id, Attributes: ActivationLockStatusAttributes{IsLocked: true, LockType: ActivationLockTypeMDM}},
+			})
 		case strings.HasSuffix(p, "/relationships/devices"):
 			testutil.WriteJSON(t, w, http.StatusOK, applebusiness.RelationshipResponse{
 				Data: []applebusiness.Data{{Type: "orgDevices", ID: "D1"}, {Type: "orgDevices", ID: "D2"}},
@@ -303,5 +308,79 @@ func TestMdmServerDeviceList(t *testing.T) {
 	}
 	if devs[0].Attributes.SerialNumber != "D1" {
 		t.Fatalf("serial: %+v", devs[0].Attributes)
+	}
+}
+
+// --- Activation Lock status (API 2.6) ---
+
+func TestActivationLockStatus(t *testing.T) {
+	var gotPath string
+	inner := devicesHandler(t)
+	c := testutil.NewClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		inner(w, r)
+	}))
+	got, err := New(c).ActivationLockStatus(context.Background(), "C39J8W1H3VG5")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/v1/orgDevices/C39J8W1H3VG5/activationLockStatus" {
+		t.Fatalf("path = %q", gotPath)
+	}
+	if got.Type != "activationLockStatus" || got.ID != "C39J8W1H3VG5" {
+		t.Fatalf("resource: %+v", got)
+	}
+	if !got.Attributes.IsLocked || got.Attributes.LockType != ActivationLockTypeMDM {
+		t.Fatalf("attributes: %+v", got.Attributes)
+	}
+}
+
+func TestActivationLockStatusDecodesUnlocked(t *testing.T) {
+	// 公式 DocC の応答例と同じ形の生 JSON（ロックされていないデバイスは isLocked=false / lockType=NONE）。
+	h := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"type":"activationLockStatus","id":"D1","attributes":{"isLocked":false,"lockType":"NONE"}},` +
+			`"links":{"self":"https://api-business.apple.com/v1/orgDevices/D1/activationLockStatus"}}`))
+	})
+	c := testutil.NewClient(t, h)
+	got, err := New(c).ActivationLockStatus(context.Background(), "D1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Attributes.IsLocked || got.Attributes.LockType != ActivationLockTypeNone {
+		t.Fatalf("attributes: %+v", got.Attributes)
+	}
+	if got.Type != "activationLockStatus" || got.ID != "D1" {
+		t.Fatalf("resource: %+v", got)
+	}
+}
+
+func TestActivationLockStatusEscapesID(t *testing.T) {
+	var gotPath string
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.EscapedPath()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"type":"activationLockStatus","id":"a/b","attributes":{"isLocked":false}}}`))
+	})
+	c := testutil.NewClient(t, h)
+	if _, err := New(c).ActivationLockStatus(context.Background(), "a/b"); err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/v1/orgDevices/a%2Fb/activationLockStatus" {
+		t.Fatalf("path = %q", gotPath)
+	}
+}
+
+func TestActivationLockStatusNotFound(t *testing.T) {
+	// 組織がそのシリアルのデバイスを管理していない場合は 404（DocC）。IsNotFound で判定できる。
+	h := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"errors":[{"id":"x","status":"404","code":"NOT_FOUND","title":"The resource could not be found"}]}`))
+	})
+	c := testutil.NewClient(t, h)
+	_, err := New(c).ActivationLockStatus(context.Background(), "UNKNOWN")
+	if !applebusiness.IsNotFound(err) {
+		t.Fatalf("want IsNotFound, got %v", err)
 	}
 }

@@ -52,7 +52,7 @@
    - ページングのイテレータ（Go 1.23 range-over-func。全件メモリ展開を避ける別APIとして追加、既存 `List` は維持）。
 
 5. **任意の拡張**（必要に応じて。一次情報は `docs/apple-business-api-datatypes.md`）
-   - 監査イベントの残り `eventData` 型（全33種のうち未型付けのもの）を追加。型は datatypes.md §4.3 準拠。
+   - ~~監査イベントの残り `eventData` 型（全33種のうち未型付けのもの）を追加~~ → 実装済み（API 2.6 の 17 種を含む全 50 種。datatypes.md §4.3 準拠）。
    - ~~`MdmDevice` / `MdmDeviceDetail` 型に対応するエンドポイント配線~~ → 実装済み（`GET /v1/mdmDevices` / `GET /v1/mdmDevices/{id}/details`。公式 DocC で確定）。
    - 不足エンドポイントは既存の `Service` パターン・汎用ヘルパで追加。
 

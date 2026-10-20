@@ -36,3 +36,17 @@ func ExampleService_Assign() {
 	}
 	fmt.Println(final.Attributes.Status, final.Attributes.SubStatus)
 }
+
+// Check whether a device is Activation Locked (API 2.6+). The ID is the
+// device's serial number; a 404 means the organization does not manage it.
+func ExampleService_ActivationLockStatus() {
+	var c *applebusiness.Client // in practice, create this with applebusiness.NewClient
+	svc := devices.New(c)
+	st, err := svc.ActivationLockStatus(context.Background(), "SERIAL_NUMBER")
+	if err != nil {
+		return
+	}
+	if st.Attributes.IsLocked {
+		fmt.Println("locked by", st.Attributes.LockType) // devices.ActivationLockTypeMDM or ActivationLockTypeUser
+	}
+}

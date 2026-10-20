@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+### Added
+- **Activation Lock ステータス取得（Apple Business API 2.6、2026-09-16 追加）**（#49）: `devices.ActivationLockStatus`（`GET /v1/orgDevices/{id}/activationLockStatus`）。`ActivationLockStatus` / `ActivationLockStatusAttributes`（`isLocked` / `lockType`）と `ActivationLockType` の定数（`ActivationLockTypeMDM` / `ActivationLockTypeUser` / `ActivationLockTypeNone`）を追加。ID はシリアル番号で、組織が管理していないデバイスは 404（`applebusiness.IsNotFound`）。✅ demo テナント（2026-10-14、`livetest`）で管理下デバイスの読み取り（`isLocked=false` / `lockType=NONE`）と未管理シリアルの 404 を確認。公式注記: デバイスが管理対象として無効な internal-only のロック状態を報告した場合、予期しないサーバーエラーで失敗することがある。
+- **監査イベントの拡充（Apple Business API 2.6、2026-09-23 追加）**（#49）: `AuditEventType` に追加された 17 種（`ROLE_CREATED` / `ROLE_UPDATED` / `TERMS_ACCEPTED` / `DOMAIN_FEDERATION_ENABLED` / `DOMAIN_FEDERATION_DISABLED` / `BATCH_PASSWORD_RESET_INITIATED` / `EXTERNAL_ACCOUNT_INVITED` / `ACCOUNT_IMAGE_SET` / `ACCOUNT_IMAGE_REPLACED` / `ACCOUNT_IMAGE_REMOVED` / `IDP_CREATED` / `IDP_UPDATED` / `IDP_DELETED` / `IDP_ACCOUNT_SYNC_ENABLED` / `IDP_ACCOUNT_SYNC_DISABLED` / `APPLE_SERVICES_SETTINGS_UPDATED` / `ACCOUNT_PASSWORD_CHANGED`）を `auditevents.Type*` 定数に追加（計 50 種）。フィールドを持つペイロード型 `RoleCreated` / `RoleUpdated` / `TermsAccepted` / `DomainFederationEnabled` / `DomainFederationDisabled` / `BatchPasswordResetInitiated` / `AccountPasswordChanged` / `IDPCreated` / `IDP`（IDP_UPDATED / IDP_DELETED 共用）/ `IDPAccountSync`（ENABLED / DISABLED 共用）/ `AppleServicesSettingsUpdated` を追加（`Payload(&v)` でデコード）。✅ `filter[type]=ROLE_UPDATED`（API 2.6 追加値）を渡した `GET /v1/auditEvents` が 200 を返すことを demo テナント（2026-10-14）で確認。
+- `auditevents` に列挙値の定数を追加（#49）: 新規の `AuditEventIdpVendorName`（`IDPVendorGoogle` / `IDPVendorMicrosoft` / `IDPVendorMicrosoftOIDC` / `IDPVendorGenericIDP`）と `AuditEventIdpProtocol`（`IDPProtocolOIDC` / `IDPProtocolSAML`）、および `AuditEventCategory`（`Category*`。API 2.6 で `ACCESS_MANAGEMENT` 追加）/ `AuditEventSubjectType`（`Subject*`。API 2.6 で `ROLE` / `IDP` / `INVITATION` 追加）/ `AuditEventActorType`（`Actor*`）/ `AuditEventOutcome`（`Outcome*`）。
+- `examples/dump-all` の Devices セクションに `/activationLockStatus` を追加。`livetest` に Activation Lock の読み取り（観測値を記録）・存在しないシリアルの 404、`filter[type]` に API 2.6 の新種別を渡す監査イベント読み取りを追加（#49）。
+
+### Changed
+- `docs/apple-business-api-datatypes.md` / `docs/apple-business-api-reference.md` を API 2.6 の公式 DocC で更新（#49）: `ActivationLockStatus` と `OrgDevice.Relationships.activationLockStatus`、監査イベント 50 種とペイロード、`GET /v1/auditEvents` のクエリ（`filter[actorId]` / `filter[subjectId]` / `filter[type]` / `fields[auditEvents]` / `limit` / `cursor`）を 📄 で確定。旧記載の snake_case のクエリ名（`start_timestamp` 等、❓二次情報）を訂正。`OrgDevice.Attributes` / `AuditEventCommonAttributes` / 既存ペイロード・既存列挙（`ConfigurationType` / `UserStatus` 等）に変更が無いことも確認。
+
 ## [0.12.0] - 2026-10-20
 
 ### Changed
