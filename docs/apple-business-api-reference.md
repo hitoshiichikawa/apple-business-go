@@ -125,7 +125,7 @@ scope=<business.api | school.api>
 | GET | `/v1/orgDevices/{id}` | デバイス詳細 |
 | GET | `/v1/orgDevices/{id}/relationships/assignedServer` | 割り当て先MDM（リレーション/IDのみ） |
 | GET | `/v1/orgDevices/{id}/assignedServer` | 割り当て先MDM（詳細情報） |
-| GET | `/v1/orgDevices/{id}/appleCareCoverage` | AppleCare保証情報 |
+| GET | `/v1/orgDevices/{id}/appleCareCoverage` | AppleCare保証情報。✅ 実機（2026-10-20）: 応答は `data` が**配列**の一覧型（`links.self` と `meta.paging.limit` 100 付き。保証が無い端末は `[]`、複数の契約が付く端末もある）。要素の `type` は `appleCareCoverage`、`id` は契約番号かシリアル番号。SDK は `AppleCareCoverages`（全件）/ `AppleCareCoverage`（1 件目、0 件なら nil） |
 
 ### 3.3 MDMサーバ（デバイス管理サービス）
 | メソッド | パス | 用途 |

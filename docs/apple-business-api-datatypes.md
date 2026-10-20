@@ -85,6 +85,8 @@
 `status`(AppleCareCoverageStatus), `paymentType`(AppleCareCoveragePaymentType), `description`(string),
 `startDateTime`(date-time), `endDateTime`(date-time), `isRenewable`(boolean), `isCanceled`(boolean),
 `contractCancelDateTime`(date-time), `agreementNumber`(string)
+> ✅ 実機（2026-10-20）: `agreementNumber` と `contractCancelDateTime` は **null になりうる**（SDK の `AppleCareCoverageAttributes` では空文字列に落ちる）。
+> 要素の `id` は契約番号（`agreementNumber` と同じ値）かシリアル番号。`GET /v1/orgDevices/{id}/appleCareCoverage` の応答は単体ではなく `data` が配列の一覧型（`meta.paging.limit` 100）。
 
 ### User.Attributes（`/v1/users`）
 `firstName`(string), `middleName`(string), `lastName`(string), `status`(UserStatus), `managedAppleAccount`(string),
