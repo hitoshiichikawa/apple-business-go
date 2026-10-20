@@ -34,6 +34,42 @@ func devicesHandler(t *testing.T) http.HandlerFunc {
 			testutil.WriteJSON(t, w, http.StatusOK, applebusiness.RelationshipResponse{
 				Data: []applebusiness.Data{{Type: "orgDevices", ID: "D1"}, {Type: "orgDevices", ID: "D2"}},
 			})
+		case strings.HasSuffix(p, "/appleCareCoverage") && r.Method == http.MethodGet:
+			// 実 AB の応答は data が配列（links.self と meta.paging.limit 100 付き）。
+			// テストごとに応答を変えるため device ID で分ける。
+			self := "http://" + r.Host + p
+			meta := applebusiness.Meta{Paging: applebusiness.Paging{Limit: 100}}
+			switch strings.TrimSuffix(strings.TrimPrefix(p, "/v1/orgDevices/"), "/appleCareCoverage") {
+			case "AC2":
+				testutil.WriteJSON(t, w, http.StatusOK, applebusiness.ListResponse[AppleCareCoverageAttributes]{
+					Data: []applebusiness.ResourceObject[AppleCareCoverageAttributes]{
+						{Type: "appleCareCoverage", ID: "325046665035", Attributes: AppleCareCoverageAttributes{
+							Status: "INACTIVE", PaymentType: "PAID_UP_FRONT", Description: "AppleCare",
+							AgreementNumber: "325046665035", StartDateTime: "2019-05-05T00:00:00Z", EndDateTime: "2020-09-30T00:00:00Z",
+							ContractCancelDateTime: "2020-09-16T00:00:00Z", IsCanceled: true,
+						}},
+						{Type: "appleCareCoverage", ID: "AC2", Attributes: AppleCareCoverageAttributes{
+							Status: "ACTIVE", PaymentType: "NONE", Description: "Limited Warranty",
+							StartDateTime: "2024-01-01T00:00:00Z", EndDateTime: "2025-01-01T00:00:00Z",
+						}},
+					},
+					Links: applebusiness.Links{Self: self},
+					Meta:  meta,
+				})
+			case "AC0":
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"data":[],"links":{"self":"` + self + `"},"meta":{"paging":{"limit":100}}}`))
+			case "AC1":
+				// agreementNumber / contractCancelDateTime が null の要素（id はシリアル番号）。
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"data":[{"type":"appleCareCoverage","id":"AC1","attributes":{` +
+					`"contractCancelDateTime":null,"startDateTime":"2025-04-01T00:00:00Z","isRenewable":false,` +
+					`"isCanceled":false,"description":"Limited Warranty","agreementNumber":null,` +
+					`"endDateTime":"2026-04-01T00:00:00Z","status":"ACTIVE","paymentType":"NONE"}}],` +
+					`"links":{"self":"` + self + `"},"meta":{"paging":{"limit":100}}}`))
+			default:
+				http.Error(w, "not found: "+p, http.StatusNotFound)
+			}
 		case strings.HasPrefix(p, "/v1/orgDevices/") && r.Method == http.MethodGet:
 			id := strings.TrimPrefix(p, "/v1/orgDevices/")
 			testutil.WriteJSON(t, w, http.StatusOK, applebusiness.SingleResponse[DeviceAttributes]{
@@ -130,6 +166,80 @@ func TestAssignedServer(t *testing.T) {
 	}
 	if srv.ID != "S1" || srv.Attributes.ServerName != "Server-1" {
 		t.Fatalf("unexpected: %+v", srv)
+	}
+}
+
+func TestAppleCareCoveragesMultiple(t *testing.T) {
+	c := testutil.NewClient(t, devicesHandler(t))
+	svc := New(c)
+	all, err := svc.AppleCareCoverages(context.Background(), "AC2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 || all[0].ID != "325046665035" || all[1].ID != "AC2" {
+		t.Fatalf("unexpected: %+v", all)
+	}
+	a := all[0].Attributes
+	if all[0].Type != "appleCareCoverage" || a.Status != "INACTIVE" || a.PaymentType != "PAID_UP_FRONT" ||
+		a.AgreementNumber != "325046665035" || a.ContractCancelDateTime != "2020-09-16T00:00:00Z" || !a.IsCanceled {
+		t.Fatalf("first coverage: %+v", all[0])
+	}
+	if all[1].Attributes.Status != "ACTIVE" || all[1].Attributes.EndDateTime != "2025-01-01T00:00:00Z" {
+		t.Fatalf("second coverage: %+v", all[1])
+	}
+
+	first, err := svc.AppleCareCoverage(context.Background(), "AC2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == nil || first.ID != "325046665035" || first.Attributes.AgreementNumber != "325046665035" {
+		t.Fatalf("AppleCareCoverage should return the first element: %+v", first)
+	}
+}
+
+func TestAppleCareCoveragesEmpty(t *testing.T) {
+	c := testutil.NewClient(t, devicesHandler(t))
+	svc := New(c)
+	all, err := svc.AppleCareCoverages(context.Background(), "AC0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 0 {
+		t.Fatalf("want 0 coverages, got %+v", all)
+	}
+
+	first, err := svc.AppleCareCoverage(context.Background(), "AC0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != nil {
+		t.Fatalf("want nil for no coverage, got %+v", first)
+	}
+}
+
+func TestAppleCareCoveragesSingleWithNulls(t *testing.T) {
+	c := testutil.NewClient(t, devicesHandler(t))
+	svc := New(c)
+	all, err := svc.AppleCareCoverages(context.Background(), "AC1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 1 || all[0].ID != "AC1" || all[0].Type != "appleCareCoverage" {
+		t.Fatalf("unexpected: %+v", all)
+	}
+	a := all[0].Attributes
+	// null はゼロ値（空文字列）に落ちる。
+	if a.AgreementNumber != "" || a.ContractCancelDateTime != "" ||
+		a.Status != "ACTIVE" || a.PaymentType != "NONE" || a.EndDateTime != "2026-04-01T00:00:00Z" {
+		t.Fatalf("attributes: %+v", a)
+	}
+
+	first, err := svc.AppleCareCoverage(context.Background(), "AC1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == nil || first.ID != "AC1" || first.Attributes != a {
+		t.Fatalf("AppleCareCoverage: %+v", first)
 	}
 }
 

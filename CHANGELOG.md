@@ -12,7 +12,17 @@
 
 ### Changed
 - `docs/apple-business-api-datatypes.md` / `docs/apple-business-api-reference.md` を API 2.6 の公式 DocC で更新（#49）: `ActivationLockStatus` と `OrgDevice.Relationships.activationLockStatus`、監査イベント 50 種とペイロード、`GET /v1/auditEvents` のクエリ（`filter[actorId]` / `filter[subjectId]` / `filter[type]` / `fields[auditEvents]` / `limit` / `cursor`）を 📄 で確定。旧記載の snake_case のクエリ名（`start_timestamp` 等、❓二次情報）を訂正。`OrgDevice.Attributes` / `AuditEventCommonAttributes` / 既存ペイロード・既存列挙（`ConfigurationType` / `UserStatus` 等）に変更が無いことも確認。
+
+## [0.12.0] - 2026-10-20
+
+### Changed
 - `docs/apple-business-api-reference.md` のレート制限を実測で更新。API 側 `429` には `Retry-After`（秒数形式、実測値 `60`）が付き、`X-RateLimit-*` 系のヘッダーは無いことを demo テナントで確認（並列 10・約 11 req/s・計 51 リクエストで発火）。ドキュメントの「100 req/s」は出所不明の推測（❓）に格下げ。
+
+### Added
+- `devices.Service.AppleCareCoverages(ctx, deviceID) ([]Coverage, error)`: 端末の AppleCare 保証を全件返す。`GET /v1/orgDevices/{id}/appleCareCoverage` の一覧の応答を `links.next` も辿って取得する。1 台に複数の契約が付く端末でどれを使うか（例: `endDateTime` が最も遅いもの）は呼び出し側が決める。
+
+### Fixed
+- `devices.Service.AppleCareCoverage` が常に失敗していた不具合を修正。実 AB の `GET /v1/orgDevices/{id}/appleCareCoverage` は `data` が配列の一覧型（`links.self` と `meta.paging.limit: 100` 付き）で返る（✅実機 2026-10-20。1 件ずつの 2 台で確認。0 件の `[]` と複数件は配列の形からの推測）が、単体（`data` が 1 オブジェクト）として decode していたため `json: cannot unmarshal array into Go struct field SingleResponse[...].data` で必ずエラーになっていた。互換のためシグネチャ（`(*Coverage, error)`）は変えず、内部で `AppleCareCoverages` を呼んで API が返した順の 1 件目へのポインタを返す。**挙動の変更**: 保証が 0 件（`data` が `[]`）のときは `nil, nil` を返す（以前は decode エラー）。呼び出し側は戻り値の nil を確かめること。なお `agreementNumber` / `contractCancelDateTime` は null になりうる（`AppleCareCoverageAttributes` では空文字列）。
 
 ## [0.11.0] - 2026-09-15
 
