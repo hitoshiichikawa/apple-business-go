@@ -32,9 +32,33 @@ func (s *Service) AssignedServer(ctx context.Context, deviceID string) (*MdmServ
 	return applebusiness.Get[MdmServerAttributes](ctx, s.c, "/v1/orgDevices/"+url.PathEscape(deviceID)+"/assignedServer")
 }
 
-// AppleCareCoverage returns AppleCare coverage for a device.
+// AppleCareCoverages returns all AppleCare coverages for a device
+// (pagination handled automatically).
+//
+// 実 Apple Business の GET /v1/orgDevices/{id}/appleCareCoverage は data が
+// 配列の一覧型で返る（links.self と meta.paging.limit 100 付き）。1 台に複数の
+// 契約が付くことがあり、契約が無ければ空配列になる。要素の ID は契約番号か
+// シリアル番号で、agreementNumber / contractCancelDateTime は null（＝ゼロ値の
+// 空文字列）になりうる。
+func (s *Service) AppleCareCoverages(ctx context.Context, deviceID string) ([]Coverage, error) {
+	return applebusiness.List[AppleCareCoverageAttributes](ctx, s.c, "/v1/orgDevices/"+url.PathEscape(deviceID)+"/appleCareCoverage", nil)
+}
+
+// AppleCareCoverage returns the first AppleCare coverage for a device, or
+// (nil, nil) when the device has none. It is kept for compatibility.
+//
+// 応答は data が配列で、全件は AppleCareCoverages で取得する。複数ある端末で
+// どれを使うかは呼び出し側が決めること（例: endDateTime が最も遅いもの）。
+// この関数は API が返した順の 1 件目をそのまま返すだけで、並べ替えや選別はしない。
 func (s *Service) AppleCareCoverage(ctx context.Context, deviceID string) (*Coverage, error) {
-	return applebusiness.Get[AppleCareCoverageAttributes](ctx, s.c, "/v1/orgDevices/"+url.PathEscape(deviceID)+"/appleCareCoverage")
+	all, err := s.AppleCareCoverages(ctx, deviceID)
+	if err != nil {
+		return nil, err
+	}
+	if len(all) == 0 {
+		return nil, nil
+	}
+	return &all[0], nil
 }
 
 // ListMdmServers returns all MDM servers (device management services).
