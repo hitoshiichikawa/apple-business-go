@@ -31,7 +31,8 @@ go run ./examples/dump-all -json > dump.json  # 機械可読(JSON配列)で保�
 6. **Blueprints**: `/v1/blueprints` → `/v1/blueprints/{id}` → `/relationships/{orgDevices,userGroups,users,apps,configurations,packages}`
 7. **Configurations**: `/v1/configurations` → `/v1/configurations/{id}`
 8. **Organizational Units**: `/v1/organizationalUnits` → `/v1/organizationalUnits/{id}` → `/relationships/users`（API 2.2）
-9. **Audit Events**: `/v1/auditEvents`（**`filter[startTimestamp]` が必須**のため、直近 `-audit-days` 日分を自動付与）
+9. **Webhooks**: `/v1/webhooks` → `/v1/webhooks/{id}` → `/deliveries?include=event`（API 2.8）
+10. **Audit Events**: `/v1/auditEvents`（**`filter[startTimestamp]` が必須**のため、直近 `-audit-days` 日分を自動付与）
 
 ## フラグ
 | フラグ | 既定 | 説明 |

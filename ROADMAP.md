@@ -12,7 +12,7 @@
 ```mermaid
 flowchart LR
     app["abm-scanner（アプリ・別リポ）<br/>PostgreSQL / 認証 / Web API / UI"]
-    sdk["apple-business-go（SDK）<br/>applebusiness / devices / people / apps / blueprints / configurations / auditevents"]
+    sdk["apple-business-go（SDK）<br/>applebusiness / devices / people / orgunits / apps / blueprints / configurations / auditevents / webhooks"]
     apple["Apple Business API<br/>api-business.apple.com"]
     app -->|import| sdk
     sdk -->|HTTPS / Bearer| apple
@@ -34,10 +34,11 @@ flowchart LR
 | `devices` | orgDevices / mdmServers（CRUD、API 2.1） / appleCareCoverage / 割り当て・解除アクティビティ / MDM移行アクティビティ（API 2.3） / リリースアクティビティ（API 2.4） / mdmDevices（一覧・詳細） / Activation Lock ステータス（API 2.5） | ✅ |
 | `people` | users / userGroups | ✅ |
 | `orgunits` | organizationalUnits（一覧・単体・所属ユーザー、読み取り、API 2.2） | ✅ |
+| `webhooks` | Webhook 管理 API（一覧・単体・作成・更新・削除・配信一覧・再配信・ping、API 2.8）。受信の補助は #60 | ✅ |
 | `apps` | apps / packages（読み取り） | ✅ |
 | `blueprints` | CRUD + リレーション操作（add=POST / remove=DELETE / replace=PATCH） | ✅ |
 | `configurations` | CRUD（CUSTOM_SETTING、`configurationProfile`=Base64） | ✅ |
-| `auditevents` | List（共通エンベロープ + `eventData` + `Payload`。全 50 種の `Type*` 定数（API 2.6）とフィールド付きペイロード型を同梱） | ✅ |
+| `auditevents` | List（共通エンベロープ + `eventData` + `Payload`。全 53 種の `Type*` 定数（API 2.8）とフィールド付きペイロード型を同梱） | ✅ |
 | データ型 | 全フィールド・列挙値・監査モデルを公式 DocC で確認し、`docs/apple-business-api-datatypes.md` に集約。各 `Attributes` をこれに一致 | ✅ |
 | その他 | examples / CI 雛形 / `docs/dev/CLAUDE.md` / `ROADMAP.md` / `docs/dev/CLAUDE_CODE_PROMPT.md` / `v0.1.0` タグ | ✅ |
 
@@ -64,6 +65,7 @@ flowchart LR
 | `devices` | orgDevices / mdmServers（CRUD、API 2.1） / appleCareCoverage / activationLockStatus（API 2.5） / activities（割り当て・解除・MDM移行・リリース） / mdmDevices（一覧・詳細） | 実装済み |
 | `people` | users / userGroups | 実装済み |
 | `orgunits` | organizationalUnits（読み取り、API 2.2） | 実装済み |
+| `webhooks` | Webhook 管理 API（API 2.8） | 実装済み |
 | `apps` | apps / packages（読み取り） | 実装済み |
 | `blueprints` | CRUD + リレーション操作 | 実装済み |
 | `configurations` | CRUD（CUSTOM_SETTING） | 実装済み |

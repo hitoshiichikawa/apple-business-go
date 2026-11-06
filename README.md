@@ -31,6 +31,7 @@ apple-business-go/
 ├── auditevents/     Audit events (read-only): auditEvents
 ├── people/          People management: users, userGroups
 ├── orgunits/        Organizational units (read-only, API 2.2): organizationalUnits
+├── webhooks/        Webhooks (API 2.8): webhooks, deliveries, redelivery, ping
 ├── brand/           Brand management (future / Apple Business Connect)
 └── support/         Support (future)
 ```
@@ -142,6 +143,27 @@ devs, err := svc.ListFiltered(ctx, f, nil)
 for d, err := range applebusiness.ListSeq[devices.DeviceAttributes](ctx, c, "/v1/orgDevices", f.Query(nil)) {
     // ...
 }
+```
+
+## Quickstart (webhooks, API 2.8+)
+
+Register the HTTPS URL that Apple notifies when a device changes. Apple signs each
+notification with the secret (HMAC-SHA256 in the `x-apple-signature` header). The
+API never returns the secret, so store it yourself. Receiving the notifications is
+up to your application.
+
+```go
+svc := webhooks.New(c)
+wh, err := svc.Create(ctx, webhooks.CreateInput{
+    Name:       "device-sync",
+    URL:        "https://example.com/apple-business/webhook",
+    Secret:     secret,
+    EventTypes: []string{webhooks.EventTypeOrgDeviceAttributeChanged},
+    Enabled:    true,
+})
+_, err = svc.Ping(ctx, wh.ID) // Apple sends a test notification to the URL
+list, err := svc.Deliveries(ctx, wh.ID, webhooks.DeliveryFilter{IncludeEvents: true}, nil)
+// after fixing a failed delivery: svc.Redeliver(ctx, list.Deliveries[0].ID)
 ```
 
 Runnable samples live in [`examples/`](./examples) (`list-devices`, `assign-devices`, `smoke-test`, `dump-all`, `write-test`).
@@ -308,7 +330,8 @@ if applebusiness.IsRateLimited(err) && errors.As(err, &apiErr) {
 | `blueprints` | `List` / `Get` / `Create` / `Update` / `Delete` / `AddTo` / `RemoveFrom` / `RelationshipIDs` | `/v1/blueprints(/{id})(/relationships/{rel})` |
 | `configurations` | `List` / `Get` / `Create` / `Update` / `Delete` | `/v1/configurations(/{id})` |
 | `apps` | `ListApps` / `GetApp` / `ListPackages` / `GetPackage` | `/v1/apps(/{id})`, `/v1/packages(/{id})` |
-| `auditevents` | `List` / `ListRange` | `/v1/auditEvents` (requires `filter[startTimestamp]`; all 50 event types of API 2.6 as `Type*` constants) |
+| `auditevents` | `List` / `ListRange` | `/v1/auditEvents` (requires `filter[startTimestamp]`; all 53 event types of API 2.8 as `Type*` constants) |
+| `webhooks` | `List` / `Get` / `Create` / `Update` / `Delete` / `Deliveries` / `Redeliver` / `Ping` | `/v1/webhooks(/{id})`, `/v1/webhooks/{id}/deliveries`, `/v1/webhookDeliveries`, `/v1/webhookPings` (API 2.8+) |
 
 The primary source for fields and enum values is [`docs/apple-business-api-datatypes.md`](./docs/apple-business-api-datatypes.md);
 endpoint details are in [`docs/apple-business-api-reference.md`](./docs/apple-business-api-reference.md).

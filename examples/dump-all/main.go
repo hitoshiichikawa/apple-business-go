@@ -272,7 +272,17 @@ func (d *dumper) run() {
 		}
 	}
 
-	// 9. Audit Events（filter[startTimestamp] が必須）
+	// 9. Webhooks（API 2.8、読み取り専用。配信履歴は 1 件目の Webhook のみ）
+	if d.want("Webhooks") {
+		d.banner("Webhooks")
+		body := d.list("/v1/webhooks")
+		if id := firstID(body); id != "" {
+			d.get("/v1/webhooks/" + esc(id))
+			d.list("/v1/webhooks/" + esc(id) + "/deliveries?include=event")
+		}
+	}
+
+	// 10. Audit Events（filter[startTimestamp] が必須）
 	if d.want("Audit Events") {
 		d.banner("Audit Events")
 		end := time.Now().UTC()

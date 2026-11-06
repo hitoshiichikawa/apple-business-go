@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Added
+- **Webhook 管理 API（Apple Business API 2.8、2026-11-04 追加）**（#59）: `webhooks` パッケージを新設。`List` / `Get` / `Create` / `Update` / `Delete`（`/v1/webhooks`）、`Deliveries`（`/v1/webhooks/{id}/deliveries`。`DeliveryFilter` で状態・作成日時の範囲を指定でき、`IncludeEvents` で送ったイベントも取得。`included` はパッケージ内の応答型で受け、`DeliveryList.Event` で引ける）、`Redeliver`（`POST /v1/webhookDeliveries`）、`Ping`（`POST /v1/webhookPings`）。型 `Webhook` / `Delivery` / `Event`、定数 `EventType*`（購読できる 4 種）/ `DeliveryState*`。`secret` は書き込み専用で応答に含まれない。📄 公式 DocC の定義どおり。
+- `auditevents` に API 2.8 の監査イベントを追加（#59）: `TypeWebhookCreated` / `TypeWebhookUpdated` / `TypeWebhookDeleted`（計 53 種）、`CategoryWebhookActivity`、`SubjectWebhook`、ペイロード型 `Webhook`（WEBHOOK_CREATED / WEBHOOK_UPDATED 共用。DocC では `enabled` が string 型）。
+- `examples/dump-all` に Webhooks 節（読み取りのみ）、`livetest` に `TestWebhook_Lifecycle`（作成〜削除。書き込みあり）を追加（#59）。
+
 ## [0.14.1] - 2026-11-06
 
 ### Fixed
