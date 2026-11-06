@@ -311,7 +311,7 @@ func TestMdmServerDeviceList(t *testing.T) {
 	}
 }
 
-// --- Activation Lock status (API 2.6) ---
+// --- Activation Lock status (API 2.5) ---
 
 func TestActivationLockStatus(t *testing.T) {
 	var gotPath string

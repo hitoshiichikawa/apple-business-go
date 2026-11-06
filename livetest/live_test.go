@@ -121,7 +121,7 @@ func TestReads_SucceedOrPermission403(t *testing.T) {
 		})
 	}
 	read("devices.List", func(ctx context.Context) error { _, e := devices.New(c).List(ctx, small); return e })
-	// Activation Lock ステータス（API 2.6、2026-09-16 追加）。観測値は -v で記録する。
+	// Activation Lock ステータス（API 2.5、2026-09-15 追加）。観測値は -v で記録する。
 	t.Run("devices.ActivationLockStatus(first device)", func(t *testing.T) {
 		ctx := ctxFor(t)
 		list, err := devices.New(c).List(ctx, small)

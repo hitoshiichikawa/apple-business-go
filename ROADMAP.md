@@ -31,7 +31,7 @@ flowchart LR
 | 区分 | 項目 | 状態 |
 |---|---|---|
 | `applebusiness` | OAuth2（ES256 JWT）/ リトライ / ページング / JSON:API / 汎用ヘルパ（List/Get/Relationship/Create/Update/Delete/ModifyRelationship） | ✅ |
-| `devices` | orgDevices / mdmServers（CRUD、API 2.1） / appleCareCoverage / 割り当て・解除アクティビティ / MDM移行アクティビティ（API 2.3） / リリースアクティビティ（API 2.4） / mdmDevices（一覧・詳細） / Activation Lock ステータス（API 2.6） | ✅ |
+| `devices` | orgDevices / mdmServers（CRUD、API 2.1） / appleCareCoverage / 割り当て・解除アクティビティ / MDM移行アクティビティ（API 2.3） / リリースアクティビティ（API 2.4） / mdmDevices（一覧・詳細） / Activation Lock ステータス（API 2.5） | ✅ |
 | `people` | users / userGroups | ✅ |
 | `orgunits` | organizationalUnits（一覧・単体・所属ユーザー、読み取り、API 2.2） | ✅ |
 | `apps` | apps / packages（読み取り） | ✅ |
@@ -61,7 +61,7 @@ flowchart LR
 | パッケージ | 内容 | 状態 |
 |---|---|---|
 | `applebusiness` | コア（認証/通信/ページング/リトライ/汎用ヘルパ） | 実装済み |
-| `devices` | orgDevices / mdmServers（CRUD、API 2.1） / appleCareCoverage / activationLockStatus（API 2.6） / activities（割り当て・解除・MDM移行・リリース） / mdmDevices（一覧・詳細） | 実装済み |
+| `devices` | orgDevices / mdmServers（CRUD、API 2.1） / appleCareCoverage / activationLockStatus（API 2.5） / activities（割り当て・解除・MDM移行・リリース） / mdmDevices（一覧・詳細） | 実装済み |
 | `people` | users / userGroups | 実装済み |
 | `orgunits` | organizationalUnits（読み取り、API 2.2） | 実装済み |
 | `apps` | apps / packages（読み取り） | 実装済み |

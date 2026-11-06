@@ -152,7 +152,7 @@ type (
 	}
 )
 
-// Event-specific payloads added in Apple Business API 2.6 (2026-09-23; per the DocC).
+// Event-specific payloads added in Apple Business API 2.6 (2026-09-24; per the DocC).
 // EXTERNAL_ACCOUNT_INVITED / ACCOUNT_IMAGE_SET / ACCOUNT_IMAGE_REPLACED / ACCOUNT_IMAGE_REMOVED
 // carry no event-specific fields (their eventData object is empty).
 type (
@@ -265,7 +265,7 @@ const (
 )
 
 // All AuditEventType values (50 in total; the last 17 were added in Apple Business API 2.6,
-// 2026-09-23). Compare against Attributes.Type to branch on the event; filter[type] accepts one of them.
+// 2026-09-24). Compare against Attributes.Type to branch on the event; filter[type] accepts one of them.
 // For the eventData payload of each type, see docs/apple-business-api-datatypes.md §4.3.
 const (
 	TypeDeviceAddedToOrg                       = "DEVICE_ADDED_TO_ORG"
@@ -302,7 +302,7 @@ const (
 	TypeAPIAccountRoleLocationChanged          = "API_ACCOUNT_ROLE_LOCATION_CHANGED"
 	TypeAPIAccountNameChanged                  = "API_ACCOUNT_NAME_CHANGED"
 
-	// Added in Apple Business API 2.6 (2026-09-23).
+	// Added in Apple Business API 2.6 (2026-09-24).
 	TypeRoleCreated                  = "ROLE_CREATED"
 	TypeRoleUpdated                  = "ROLE_UPDATED"
 	TypeTermsAccepted                = "TERMS_ACCEPTED"

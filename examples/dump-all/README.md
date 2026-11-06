@@ -23,7 +23,7 @@ go run ./examples/dump-all -json > dump.json  # 機械可読(JSON配列)で保�
 - 出力されるトークンは先頭8文字のみマスク表示。`.pem`・トークンはコミット/共有しないでください。
 
 ## 叩く順番（GETのみ）
-1. **Devices**: `/v1/orgDevices` → `/v1/orgDevices/{id}` → `/assignedServer` → `/appleCareCoverage` → `/activationLockStatus`（API 2.6）
+1. **Devices**: `/v1/orgDevices` → `/v1/orgDevices/{id}` → `/assignedServer` → `/appleCareCoverage` → `/activationLockStatus`（API 2.5）
 2. **Device Management Services**: `/v1/mdmServers` → `/v1/mdmServers/{id}` → `/relationships/devices`
 3. **Users**: `/v1/users` → `/v1/users/{id}`
 4. **UserGroups**: `/v1/userGroups` → `/v1/userGroups/{id}` → `/relationships/users`

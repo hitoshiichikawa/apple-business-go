@@ -62,8 +62,8 @@ func (s *Service) AppleCareCoverage(ctx context.Context, deviceID string) (*Cove
 }
 
 // ActivationLockStatus returns the Activation Lock status of a device
-// (GET /v1/orgDevices/{id}/activationLockStatus, Apple Business API 2.6;
-// added 2026-09-16). deviceID is the device's serial number; a 404
+// (GET /v1/orgDevices/{id}/activationLockStatus, Apple Business API 2.5;
+// added 2026-09-15). deviceID is the device's serial number; a 404
 // (applebusiness.IsNotFound) means the organization does not manage a device
 // with that serial number.
 //

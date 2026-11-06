@@ -112,7 +112,7 @@ act, err := svc.ReleaseDevices(ctx, deviceIDs)
 final, err := svc.PollActivity(ctx, act.ID, 3*time.Second)
 ```
 
-## Quickstart (Activation Lock status, API 2.6+)
+## Quickstart (Activation Lock status, API 2.5+)
 
 The ID is the device's serial number; a 404 (`applebusiness.IsNotFound`) means the
 organization does not manage that device.
@@ -296,7 +296,7 @@ if applebusiness.IsRateLimited(err) && errors.As(err, &apiErr) {
 |---|---|---|
 | `devices` | `List` / `Get` | `/v1/orgDevices`, `/v1/orgDevices/{id}` |
 | `devices` | `ListFiltered` (`DeviceFilter`) | `/v1/orgDevices` with `filter[...]` (API 2.7+) |
-| `devices` | `AssignedServer` / `AppleCareCoverage` / `ActivationLockStatus` | `/v1/orgDevices/{id}/assignedServer`, `.../appleCareCoverage`, `.../activationLockStatus` (API 2.6+) |
+| `devices` | `AssignedServer` / `AppleCareCoverage` / `ActivationLockStatus` | `/v1/orgDevices/{id}/assignedServer`, `.../appleCareCoverage`, `.../activationLockStatus` (API 2.5+) |
 | `devices` | `ListMdmServers` / `GetMdmServer` / `CreateMdmServer` / `UpdateMdmServer` / `DeleteMdmServer` / `MdmServerDevices` | `/v1/mdmServers(/{id})`, `/v1/mdmServers/{id}/relationships/devices` (CRUD: API 2.1+) |
 | `devices` | `ListMdmDevices` / `MdmDeviceDetails` | `/v1/mdmDevices`, `/v1/mdmDevices/{id}/details` |
 | `devices` | `Assign` / `Unassign` / `GetActivity` / `PollActivity` | `/v1/orgDeviceActivities(/{id})` |
