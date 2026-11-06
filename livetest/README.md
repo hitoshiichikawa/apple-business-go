@@ -33,7 +33,7 @@ go test -tags livetest ./livetest -v
 | `TestBlueprintCreate_Validation` | メンバー無しの作成 → 409 `MISSING_MEMBERS`／リソース無しの作成 → 409 `MISSING_RESOURCES` |
 | `TestBlueprintRelationships` | `AddTo`/`RemoveFrom`(apps) 成功、`Replace`(apps / configurations) → 403 `FORBIDDEN_ERROR`（REPLACE 非対応）。`Replace`(orgDevices / packages) は結果を記録のみ |
 | `TestMdmServer_CertAlgorithm` | EC 証明書 → 400 `PARAMETER_ERROR.INVALID`、RSA 証明書 → Create/Get/Update/Delete 成功 |
-| `TestWebhook_Lifecycle` | Webhook（API 2.8）の作成 → 取得 → 更新 → ping → 配信一覧 → 再配信 → 削除（削除後の取得は 404）。URL は名前解決できない `.invalid` ドメインで、通知は外部に届かない。配信の状態と、作成・更新・削除の監査イベントの `eventData` は記録のみ |
+| `TestWebhook_Lifecycle` | Webhook（API 2.8）の作成 → 取得 → 更新 → ping → 配信一覧 → 再配信 → 削除（削除後の取得は 404）。URL は名前解決できない `.invalid` ドメインで、通知は外部に届かない。配信の状態と、作成・更新・削除の監査イベントの `eventData` は記録のみ。ping のイベントの `payload` が `webhooks.ParseNotification` で読めることも確認する |
 
 「記録のみ」の項目（メンバー系関連への REPLACE、packages への REPLACE）は、Apple の挙動が未確認のため
 `t.Logf` で観測結果を出すだけで、成否は判定しません（`-v` で確認）。

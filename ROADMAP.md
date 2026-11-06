@@ -34,7 +34,7 @@ flowchart LR
 | `devices` | orgDevices / mdmServers（CRUD、API 2.1） / appleCareCoverage / 割り当て・解除アクティビティ / MDM移行アクティビティ（API 2.3） / リリースアクティビティ（API 2.4） / mdmDevices（一覧・詳細） / Activation Lock ステータス（API 2.5） | ✅ |
 | `people` | users / userGroups | ✅ |
 | `orgunits` | organizationalUnits（一覧・単体・所属ユーザー、読み取り、API 2.2） | ✅ |
-| `webhooks` | Webhook 管理 API（一覧・単体・作成・更新・削除・配信一覧・再配信・ping、API 2.8）。受信の補助は #60 | ✅ |
+| `webhooks` | Webhook 管理 API（一覧・単体・作成・更新・削除・配信一覧・再配信・ping、API 2.8）と受信の補助（署名検証・通知本文の解析） | ✅ |
 | `apps` | apps / packages（読み取り） | ✅ |
 | `blueprints` | CRUD + リレーション操作（add=POST / remove=DELETE / replace=PATCH） | ✅ |
 | `configurations` | CRUD（CUSTOM_SETTING、`configurationProfile`=Base64） | ✅ |

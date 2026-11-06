@@ -31,7 +31,7 @@ apple-business-go/
 ├── auditevents/     Audit events (read-only): auditEvents
 ├── people/          People management: users, userGroups
 ├── orgunits/        Organizational units (read-only, API 2.2): organizationalUnits
-├── webhooks/        Webhooks (API 2.8): webhooks, deliveries, redelivery, ping
+├── webhooks/        Webhooks (API 2.8): webhooks, deliveries, redelivery, ping; signature verification and notification parsing
 ├── brand/           Brand management (future / Apple Business Connect)
 └── support/         Support (future)
 ```
@@ -165,6 +165,24 @@ _, err = svc.Ping(ctx, wh.ID) // Apple sends a test notification to the URL
 // the creation-time range is required; a zero end means now
 list, err := svc.Deliveries(ctx, wh.ID, time.Now().Add(-time.Hour), time.Time{}, webhooks.DeliveryFilter{IncludeEvents: true}, nil)
 // after fixing a failed delivery: svc.Redeliver(ctx, list.Deliveries[0].ID)
+```
+
+In the HTTP handler that receives the notifications, verify the signature and
+parse the body (the package does not run a server). The signature covers the
+body only and has no timestamp, so drop duplicates by the notification ID where
+it is set (the ping payload has none).
+
+```go
+body, err := webhooks.VerifyRequest(r, secret, 0) // reads up to 1 MiB, checks x-apple-signature
+if err != nil {
+    http.Error(w, "invalid signature", http.StatusUnauthorized)
+    return
+}
+n, err := webhooks.ParseNotification(body)
+if err == nil && n.Type == webhooks.NotificationOrgDeviceAttributeChanged {
+    var a webhooks.DeviceChanged
+    _ = n.DecodeAttributes(&a) // a.OrgDeviceSerialNumber; re-read the device with devices.Get
+}
 ```
 
 Runnable samples live in [`examples/`](./examples) (`list-devices`, `assign-devices`, `smoke-test`, `dump-all`, `write-test`).
@@ -333,6 +351,7 @@ if applebusiness.IsRateLimited(err) && errors.As(err, &apiErr) {
 | `apps` | `ListApps` / `GetApp` / `ListPackages` / `GetPackage` | `/v1/apps(/{id})`, `/v1/packages(/{id})` |
 | `auditevents` | `List` / `ListRange` | `/v1/auditEvents` (requires `filter[startTimestamp]`; all 53 event types of API 2.8 as `Type*` constants) |
 | `webhooks` | `List` / `Get` / `Create` / `Update` / `Delete` / `Deliveries` / `Redeliver` / `Ping` | `/v1/webhooks(/{id})`, `/v1/webhooks/{id}/deliveries`, `/v1/webhookDeliveries`, `/v1/webhookPings` (API 2.8+) |
+| `webhooks` | `VerifySignature` / `VerifyRequest` / `ParseNotification` | receiving notifications: `x-apple-signature` (HMAC-SHA256) and the notification body (no HTTP calls) |
 
 The primary source for fields and enum values is [`docs/apple-business-api-datatypes.md`](./docs/apple-business-api-datatypes.md);
 endpoint details are in [`docs/apple-business-api-reference.md`](./docs/apple-business-api-reference.md).
