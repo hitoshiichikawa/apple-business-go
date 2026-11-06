@@ -142,7 +142,7 @@
 > 📄 **API 2.8（2026-11-04）で追加**。`name`(string), `enabled`(boolean), `eventTypes`([WebhookEventType]), `url`(uri), `createdDateTime`(date-time), `updatedDateTime`(date-time)。作成・更新では加えて `secret`(string) を送る（作成時は `name` / `enabled` / `eventTypes` / `secret` / `url` がすべて必須、更新時はすべて任意）。**`secret` は書き込み専用で応答には含まれない**。`relationships.deliveries` あり。SDK は `webhooks.Webhook`。
 
 ### WebhookDelivery.Attributes（`/v1/webhooks/{id}/deliveries`、API 2.8）
-> 📄 `createdDateTime`(date-time), `deliveryState`(`SUCCEEDED` / `FAILED` / `PENDING`), `errorMessage`(string。HTTP 応答が無かったときのエラー), `redelivery`(boolean), `sentDateTime`(date-time), `request`{`url`}, `response`{`httpStatusCode`(integer), `body`(string。2xx 以外のときのみ)}。`relationships.event` が送った `WebhookEvent` を指す。クエリ: `filter[deliveryState]`（複数値はカンマ区切り）/ `filter[createdDateTimeAtOrAfter]` / `filter[createdDateTimeAtBefore]` / `fields[webhookDeliveries]` / `fields[webhookEvents]` / `include=event` / `limit`(≤1000) / `cursor`。SDK は `webhooks.Delivery` / `Deliveries`。
+> 📄 `createdDateTime`(date-time), `deliveryState`(`SUCCEEDED` / `FAILED` / `PENDING`), `errorMessage`(string。HTTP 応答が無かったときのエラー), `redelivery`(boolean), `sentDateTime`(date-time), `request`{`url`}, `response`{`httpStatusCode`(integer), `body`(string。2xx 以外のときのみ)}。`relationships.event` が送った `WebhookEvent` を指す。クエリ: ✅ `filter[createdDateTimeAtOrAfter]` と `filter[createdDateTimeAtBefore]` は**両方必須**（DocC では任意だが、実機は片方でも欠けると 400 `PARAMETER_ERROR.REQUIRED`、未来の日時は 409 `ENTITY_ERROR.ATTRIBUTE.INVALID`。2026-11-06）/ `filter[deliveryState]`（複数値はカンマ区切り）/ `fields[webhookDeliveries]` / `fields[webhookEvents]` / `include=event` / `limit`(≤1000) / `cursor`。SDK は `webhooks.Delivery` / `Deliveries`。
 
 ### WebhookEvent.Attributes（API 2.8）
 > 📄 `eventType`(WebhookEventType), `payload`(string＝送った通知本文の JSON 文字列), `isPingEvent`(boolean), `createdDateTime`(date-time)。配信一覧の `include=event` で `included` に入る。SDK は `webhooks.Event`。
@@ -260,7 +260,7 @@ attributes = AuditEventCommonAttributes（共通）+ eventData<Event>（イベ�
 | `AuditEventIdpUpdated` / `AuditEventIdpDeleted`（API 2.6+） | `vendorName`(AuditEventIdpVendorName) |
 | `AuditEventIdpAccountSyncEnabled` / `AuditEventIdpAccountSyncDisabled`（API 2.6+） | `vendorName`(AuditEventIdpVendorName), `activityId` |
 | `AuditEventAppleServicesSettingsUpdated`（API 2.6+） | `settingsEnabled`([string]), `settingsDisabled`([string]) |
-| `AuditEventWebhookCreated` / `AuditEventWebhookUpdated`（API 2.8+） | `name`, `enabled`（DocC 上は **string**）, `eventTypes`([string]), `url`。`AuditEventWebhookDeleted` はフィールドなし。SDK は `auditevents.Webhook`（共用） |
+| `AuditEventWebhookCreated` / `AuditEventWebhookUpdated`（API 2.8+） | `name`, `enabled`（DocC 上は **string**）, `eventTypes`([string]), `url`。`AuditEventWebhookDeleted` はフィールドなし。SDK は `auditevents.Webhook`（共用）。✅ 実機（2026-11-06）: `enabled` は文字列（`"true"`）。`WEBHOOK_UPDATED` には変更した属性だけが入り、ほかは `null` / 空配列。`WEBHOOK_DELETED` は `{}` |
 
 > 上記以外（`DEVICE_IS_ERASED`, `ACCOUNT_ADDED/DELETED`, `EXTERNAL_ACCOUNT_ASSOCIATED/DISASSOCIATED/INVITED`, `DOMAIN_ADDED/REMOVED/VERIFIED`, `API_ACCOUNT_CREATED_WITHOUT_KEY/DELETED`, `ACCOUNT_IMAGE_SET/REPLACED/REMOVED` 等）は eventData にフィールドを持たない（空オブジェクト）か、共通項目のみ（📄 2026-10-08 に DocC で再確認）。
 

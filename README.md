@@ -162,7 +162,8 @@ wh, err := svc.Create(ctx, webhooks.CreateInput{
     Enabled:    true,
 })
 _, err = svc.Ping(ctx, wh.ID) // Apple sends a test notification to the URL
-list, err := svc.Deliveries(ctx, wh.ID, webhooks.DeliveryFilter{IncludeEvents: true}, nil)
+// the creation-time range is required; a zero end means now
+list, err := svc.Deliveries(ctx, wh.ID, time.Now().Add(-time.Hour), time.Time{}, webhooks.DeliveryFilter{IncludeEvents: true}, nil)
 // after fixing a failed delivery: svc.Redeliver(ctx, list.Deliveries[0].ID)
 ```
 

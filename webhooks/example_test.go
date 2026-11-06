@@ -37,10 +37,10 @@ func ExampleService_Deliveries() {
 	if _, err := svc.Ping(ctx, "WEBHOOK_ID"); err != nil {
 		return
 	}
-	list, err := svc.Deliveries(ctx, "WEBHOOK_ID", webhooks.DeliveryFilter{
-		States:           []string{webhooks.DeliveryStateFailed},
-		CreatedAtOrAfter: time.Now().Add(-24 * time.Hour),
-		IncludeEvents:    true,
+	// The API requires the creation-time range; a zero end means now.
+	list, err := svc.Deliveries(ctx, "WEBHOOK_ID", time.Now().Add(-24*time.Hour), time.Time{}, webhooks.DeliveryFilter{
+		States:        []string{webhooks.DeliveryStateFailed},
+		IncludeEvents: true,
 	}, nil)
 	if err != nil {
 		return

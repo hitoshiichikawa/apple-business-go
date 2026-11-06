@@ -278,7 +278,13 @@ func (d *dumper) run() {
 		body := d.list("/v1/webhooks")
 		if id := firstID(body); id != "" {
 			d.get("/v1/webhooks/" + esc(id))
-			d.list("/v1/webhooks/" + esc(id) + "/deliveries?include=event")
+			// 配信一覧は作成日時の範囲が必須（直近 -audit-days 日分）。
+			end := time.Now().UTC()
+			dq := url.Values{}
+			dq.Set("filter[createdDateTimeAtOrAfter]", end.AddDate(0, 0, -d.auditDays).Format(time.RFC3339))
+			dq.Set("filter[createdDateTimeAtBefore]", end.Format(time.RFC3339))
+			dq.Set("include", "event")
+			d.list("/v1/webhooks/" + esc(id) + "/deliveries?" + dq.Encode())
 		}
 	}
 

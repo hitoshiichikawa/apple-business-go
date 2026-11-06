@@ -199,11 +199,11 @@ func TestDeliveriesFollowsPagesAndCollectsEvents(t *testing.T) {
 			`"payload":"{}"}}],"links":{}}`))
 	}))
 	q := url.Values{"limit": {"100"}}
-	list, err := New(c).Deliveries(context.Background(), "W1", DeliveryFilter{
-		States:           []string{DeliveryStateFailed, "", DeliveryStatePending},
-		CreatedAtOrAfter: time.Date(2026, 11, 6, 9, 0, 0, 0, time.FixedZone("JST", 9*60*60)),
-		CreatedBefore:    time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC),
-		IncludeEvents:    true,
+	from := time.Date(2026, 11, 6, 9, 0, 0, 0, time.FixedZone("JST", 9*60*60)) // UTC に変換して送る
+	to := time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC)
+	list, err := New(c).Deliveries(context.Background(), "W1", from, to, DeliveryFilter{
+		States:        []string{DeliveryStateFailed, "", DeliveryStatePending},
+		IncludeEvents: true,
 	}, q)
 	if err != nil {
 		t.Fatal(err)
@@ -246,17 +246,38 @@ func TestDeliveriesFollowsPagesAndCollectsEvents(t *testing.T) {
 	}
 }
 
-func TestDeliveriesZeroFilterSendsNoQuery(t *testing.T) {
+// 実機の API は filter[createdDateTimeAtOrAfter] と filter[createdDateTimeAtBefore] の
+// 両方を必須とする（片方でも欠けると 400 PARAMETER_ERROR.REQUIRED。2026-11-06 確認）。
+func TestDeliveriesRequiresFrom(t *testing.T) {
 	var got []recorded
 	c := testutil.NewClient(t, recorder(t, &got, func(w http.ResponseWriter, _ *http.Request) {
 		testutil.WriteJSON(t, w, http.StatusOK, map[string]any{"data": []any{}, "links": map[string]any{}})
 	}))
-	list, err := New(c).Deliveries(context.Background(), "W1", DeliveryFilter{}, nil)
+	if _, err := New(c).Deliveries(context.Background(), "W1", time.Time{}, time.Now(), DeliveryFilter{}, nil); err == nil {
+		t.Fatal("want an error for a zero from")
+	}
+	if len(got) != 0 {
+		t.Fatalf("no request should be sent, got %+v", got)
+	}
+}
+
+func TestDeliveriesZeroToMeansNow(t *testing.T) {
+	var got []recorded
+	c := testutil.NewClient(t, recorder(t, &got, func(w http.ResponseWriter, _ *http.Request) {
+		testutil.WriteJSON(t, w, http.StatusOK, map[string]any{"data": []any{}, "links": map[string]any{}})
+	}))
+	from := time.Now().Add(-time.Hour)
+	list, err := New(c).Deliveries(context.Background(), "W1", from, time.Time{}, DeliveryFilter{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got[0].rawQuery != "" {
-		t.Fatalf("query = %q, want none", got[0].rawQuery)
+	q, _ := url.ParseQuery(got[0].rawQuery)
+	if len(q) != 2 || q.Get("filter[createdDateTimeAtOrAfter]") != from.UTC().Format(time.RFC3339) {
+		t.Fatalf("query = %v", q)
+	}
+	before, err := time.Parse(time.RFC3339, q.Get("filter[createdDateTimeAtBefore]"))
+	if err != nil || time.Since(before) > time.Minute || time.Until(before) > time.Minute {
+		t.Fatalf("filter[createdDateTimeAtBefore] = %q, want about now", q.Get("filter[createdDateTimeAtBefore]"))
 	}
 	if len(list.Deliveries) != 0 || list.Events == nil {
 		t.Fatalf("list: %+v", list)

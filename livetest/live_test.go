@@ -529,10 +529,12 @@ func TestWebhook_Lifecycle(t *testing.T) {
 	}
 	t.Logf("ping %s sent", pingID)
 
-	// 配信が記録され、すべて PENDING 以外になるまで最大 60 秒待つ。
+	// 配信が記録され、すべて PENDING 以外になるまで最大 60 秒待つ。作成日時の範囲は API で必須で、
+	// 未来の日時は 409 になるため終わりは現在時刻（ゼロ値）にする。時計のずれで直近の配信を
+	// 取りこぼしても、繰り返し取得するうちに拾える。
 	var list *webhooks.DeliveryList
 	for deadline := time.Now().Add(60 * time.Second); ; {
-		list, err = svc.Deliveries(ctx, wh.ID, webhooks.DeliveryFilter{IncludeEvents: true}, nil)
+		list, err = svc.Deliveries(ctx, wh.ID, start, time.Time{}, webhooks.DeliveryFilter{IncludeEvents: true}, nil)
 		if err != nil {
 			t.Fatalf("webhooks.Deliveries: %v", err)
 		}
@@ -597,7 +599,8 @@ func logWebhookAuditEvents(ctx context.Context, t *testing.T, c *applebusiness.C
 		auditevents.TypeWebhookDeleted: false,
 	}
 	for deadline := time.Now().Add(90 * time.Second); ; {
-		events, err := auditevents.New(c).ListRange(ctx, start, time.Time{}, url.Values{"limit": {"1000"}})
+		// filter[endTimestamp] も実機では必須（ゼロ値で省略すると 400。2026-11-06）。
+		events, err := auditevents.New(c).ListRange(ctx, start, time.Now(), url.Values{"limit": {"1000"}})
 		if err != nil {
 			t.Logf("auditevents.ListRange: %v", err)
 			return

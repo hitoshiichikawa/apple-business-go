@@ -10,6 +10,7 @@ package webhooks
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -101,18 +102,12 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	return applebusiness.Delete(ctx, s.c, "/v1/webhooks/"+url.PathEscape(id))
 }
 
-// DeliveryFilter narrows GET /v1/webhooks/{id}/deliveries. The zero value
-// returns every delivery, without the events.
+// DeliveryFilter narrows GET /v1/webhooks/{id}/deliveries beyond the required
+// time range. The zero value adds nothing.
 type DeliveryFilter struct {
 	// States filters by delivery state (DeliveryState* values); several values
 	// are sent comma-separated as filter[deliveryState].
 	States []string
-	// CreatedAtOrAfter returns only deliveries created at or after this time
-	// (filter[createdDateTimeAtOrAfter]).
-	CreatedAtOrAfter time.Time
-	// CreatedBefore returns only deliveries created before this time
-	// (filter[createdDateTimeAtBefore], as the parameter is spelled in the API).
-	CreatedBefore time.Time
 	// IncludeEvents also returns the events that the deliveries sent
 	// (include=event); look them up with DeliveryList.Event.
 	IncludeEvents bool
@@ -132,15 +127,26 @@ func (l *DeliveryList) Event(d Delivery) (Event, bool) {
 	return e, ok
 }
 
-// Deliveries returns the past deliveries of a webhook
-// (GET /v1/webhooks/{id}/deliveries, pagination handled automatically). q
-// holds other query parameters such as limit and may be nil; it is not
-// modified.
-func (s *Service) Deliveries(ctx context.Context, webhookID string, f DeliveryFilter, q url.Values) (*DeliveryList, error) {
-	endpoint := s.c.BaseURL() + "/v1/webhooks/" + url.PathEscape(webhookID) + "/deliveries"
-	if v := f.query(q); len(v) > 0 {
-		endpoint += "?" + v.Encode()
+// Deliveries returns the deliveries of a webhook created at or after from and
+// before to (GET /v1/webhooks/{id}/deliveries, pagination handled
+// automatically). The API requires both ends of the range
+// (filter[createdDateTimeAtOrAfter] and filter[createdDateTimeAtBefore]) even
+// though the DocC lists them as optional, so from must be set; a zero to means
+// now. Neither may be in the future: the API rejects that with 409
+// ENTITY_ERROR.ATTRIBUTE.INVALID. Times are sent in UTC as RFC 3339 (whole
+// seconds). q holds other query parameters such
+// as limit and may be nil; it is not modified.
+func (s *Service) Deliveries(ctx context.Context, webhookID string, from, to time.Time, f DeliveryFilter, q url.Values) (*DeliveryList, error) {
+	if from.IsZero() {
+		return nil, errors.New("webhooks: Deliveries requires a non-zero from (the API requires filter[createdDateTimeAtOrAfter])")
 	}
+	if to.IsZero() {
+		to = time.Now()
+	}
+	v := f.query(q)
+	v.Set("filter[createdDateTimeAtOrAfter]", from.UTC().Format(time.RFC3339))
+	v.Set("filter[createdDateTimeAtBefore]", to.UTC().Format(time.RFC3339))
+	endpoint := s.c.BaseURL() + "/v1/webhooks/" + url.PathEscape(webhookID) + "/deliveries?" + v.Encode()
 	out := &DeliveryList{Events: map[string]Event{}}
 	// コアの List は included を返さないため、links.next を自前で辿る。
 	for endpoint != "" {
@@ -212,12 +218,6 @@ func (f DeliveryFilter) query(base url.Values) url.Values {
 	}
 	if len(states) > 0 {
 		q.Set("filter[deliveryState]", strings.Join(states, ","))
-	}
-	if !f.CreatedAtOrAfter.IsZero() {
-		q.Set("filter[createdDateTimeAtOrAfter]", f.CreatedAtOrAfter.UTC().Format(time.RFC3339))
-	}
-	if !f.CreatedBefore.IsZero() {
-		q.Set("filter[createdDateTimeAtBefore]", f.CreatedBefore.UTC().Format(time.RFC3339))
 	}
 	if f.IncludeEvents {
 		q.Set("include", "event")

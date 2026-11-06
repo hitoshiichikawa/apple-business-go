@@ -224,9 +224,12 @@ const (
 // Event-specific payload added in Apple Business API 2.8 (2026-11-04; per the DocC),
 // shared by WEBHOOK_CREATED and WEBHOOK_UPDATED (AuditEventWebhookCreated /
 // AuditEventWebhookUpdated). WEBHOOK_DELETED carries no event-specific fields.
+// Enabled is a string such as "true", as in the DocC and the live API. In
+// WEBHOOK_UPDATED only the changed attributes are set; the others are null or
+// empty (observed 2026-11-06).
 type Webhook struct {
 	Name       string   `json:"name,omitempty"`
-	Enabled    string   `json:"enabled,omitempty"` // a string in the DocC, not a boolean
+	Enabled    string   `json:"enabled,omitempty"` // "true" / "false", not a boolean
 	EventTypes []string `json:"eventTypes,omitempty"`
 	URL        string   `json:"url,omitempty"`
 }
