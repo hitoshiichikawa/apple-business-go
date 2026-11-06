@@ -183,7 +183,7 @@ const (
 	LostModeDisabled     = "DISABLED"
 )
 
-// --- Activation Lock (Apple Business API 2.6, added 2026-09-16) ---
+// --- Activation Lock (Apple Business API 2.5, added 2026-09-15) ---
 
 // ActivationLockStatus is the Activation Lock status of an organization device
 // (GET /v1/orgDevices/{id}/activationLockStatus). The resource type is
