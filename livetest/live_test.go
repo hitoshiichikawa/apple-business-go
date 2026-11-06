@@ -286,6 +286,11 @@ func TestReads_SucceedOrPermission403(t *testing.T) {
 		return e
 	})
 	// API 2.6 で追加されたイベント種別を filter[type] に渡しても 400 にならないこと。
+	// 終了日時をゼロ値にしても 400 にならないこと（#63。ListRange が現在時刻を送る）。
+	read("auditevents.ListRange(24h, zero end)", func(ctx context.Context) error {
+		_, e := auditevents.New(c).ListRange(ctx, time.Now().Add(-24*time.Hour), time.Time{}, auditQ)
+		return e
+	})
 	read("auditevents.ListRange(24h, filter[type]=ROLE_UPDATED)", func(ctx context.Context) error {
 		q := url.Values{"limit": {"1000"}, "filter[type]": {auditevents.TypeRoleUpdated}}
 		_, e := auditevents.New(c).ListRange(ctx, time.Now().Add(-24*time.Hour), time.Now(), q)
@@ -611,7 +616,7 @@ func logWebhookAuditEvents(ctx context.Context, t *testing.T, c *applebusiness.C
 		auditevents.TypeWebhookDeleted: false,
 	}
 	for deadline := time.Now().Add(90 * time.Second); ; {
-		// filter[endTimestamp] も実機では必須（ゼロ値で省略すると 400。2026-11-06）。
+		// filter[endTimestamp] も実機では必須（#63）。ListRange はゼロ値なら現在時刻を送るが、ここでは明示する。
 		events, err := auditevents.New(c).ListRange(ctx, start, time.Now(), url.Values{"limit": {"1000"}})
 		if err != nil {
 			t.Logf("auditevents.ListRange: %v", err)

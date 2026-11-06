@@ -350,9 +350,10 @@ type Service struct {
 func New(c *applebusiness.Client) *Service { return &Service{c: c} }
 
 // List retrieves audit events (all pages).
-// Note: /v1/auditEvents requires filter[startTimestamp] (omitting it returns 400 PARAMETER_ERROR).
+// Note: /v1/auditEvents requires both filter[startTimestamp] and filter[endTimestamp]
+// (omitting either returns 400 PARAMETER_ERROR.REQUIRED).
 // ListRange is the simplest way to specify a time range. To pass it manually, set
-// "filter[startTimestamp]" (required, ISO8601) and "filter[endTimestamp]" (optional, ISO8601) in q.
+// "filter[startTimestamp]" and "filter[endTimestamp]" (both required, ISO8601) in q.
 // Other query parameters per the DocC: "filter[actorId]", "filter[subjectId]", "filter[type]"
 // (one value each; use the Type* constants), "fields[auditEvents]", and "limit" (max 1000).
 func (s *Service) List(ctx context.Context, q url.Values) ([]AuditEvent, error) {
@@ -360,17 +361,19 @@ func (s *Service) List(ctx context.Context, q url.Values) ([]AuditEvent, error) 
 }
 
 // ListRange retrieves audit events within a time range (all pages).
-// start maps to filter[startTimestamp] (required); end maps to filter[endTimestamp] (omitted when zero).
-// Both are sent as UTC RFC3339 (ISO8601). Additional filters can be passed via q
+// start maps to filter[startTimestamp] and end to filter[endTimestamp]. The API requires
+// both, so a zero end means now (the API also accepts an end in the future). Both are
+// sent as UTC RFC3339 (ISO8601). Additional filters can be passed via q
 // (may be nil); the caller's q is not modified.
 func (s *Service) ListRange(ctx context.Context, start, end time.Time, q url.Values) ([]AuditEvent, error) {
 	merged := make(url.Values, len(q)+2)
 	for k, v := range q {
 		merged[k] = v
 	}
-	merged.Set("filter[startTimestamp]", start.UTC().Format(time.RFC3339))
-	if !end.IsZero() {
-		merged.Set("filter[endTimestamp]", end.UTC().Format(time.RFC3339))
+	if end.IsZero() {
+		end = time.Now() // filter[endTimestamp] も必須（省くと 400。2026-11-06 確認）
 	}
+	merged.Set("filter[startTimestamp]", start.UTC().Format(time.RFC3339))
+	merged.Set("filter[endTimestamp]", end.UTC().Format(time.RFC3339))
 	return applebusiness.List[Attributes](ctx, s.c, "/v1/auditEvents", merged)
 }
