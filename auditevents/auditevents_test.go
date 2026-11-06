@@ -67,7 +67,8 @@ func TestListRange(t *testing.T) {
 	}
 }
 
-func TestListRangeOmitsEndWhenZero(t *testing.T) {
+// 実際の API は filter[endTimestamp] も必須のため、end のゼロ値は現在時刻として送る（#63）。
+func TestListRangeSendsNowWhenEndIsZero(t *testing.T) {
 	var gotStart, gotEnd string
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -83,8 +84,9 @@ func TestListRangeOmitsEndWhenZero(t *testing.T) {
 	if gotStart == "" {
 		t.Fatal("filter[startTimestamp] should be set")
 	}
-	if gotEnd != "" {
-		t.Fatalf("filter[endTimestamp] should be empty, got %q", gotEnd)
+	end, err := time.Parse(time.RFC3339, gotEnd)
+	if err != nil || time.Since(end) > time.Minute || time.Until(end) > time.Minute {
+		t.Fatalf("filter[endTimestamp] = %q, want about now", gotEnd)
 	}
 }
 

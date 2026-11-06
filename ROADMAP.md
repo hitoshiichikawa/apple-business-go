@@ -125,7 +125,7 @@ Configurations はセキュリティ/ネットワーク等の設定単位、Blue
 
 > 解決済み: OAuth 方式（token端点=`/auth/oauth2/token`、アサーション `aud`=`/auth/oauth2/v2/token`、`iss`=team_id（=client_id）、ES256、scope、180日/60分。Web で確認済み）/
 > `MdmDevice` / `MdmDeviceDetail` の取得エンドポイントは `GET /v1/mdmDevices` / `GET /v1/mdmDevices/{id}/details`（API v2.0 で追加。公式 DocC で確定。`/v1/mdmServers/{id}/devices` という related エンドポイントは存在しない）/
-> auditEvents の必須クエリ `filter[startTimestamp]`（+ `filter[endTimestamp]`、ISO8601。実APIで確認）/
+> auditEvents の必須クエリ `filter[startTimestamp]` と `filter[endTimestamp]`（両方必須、ISO8601。実APIで確認。`filter[endTimestamp]` の必須は 2026-11-06）/
 > アクティビティ status `IN_PROGRESS`→`COMPLETED`（部分失敗でも COMPLETED）・subStatus `COMPLETED_WITH_ERROR`（実APIで確認。PollActivity は処理中以外を終了とみなす）/
 > フィールド名（userGroup の `type` 等）/ 列挙値 / 監査イベントモデル /
 > Blueprints・Configurations の書き込み仕様（`docs/apple-business-api-datatypes.md`, reference §7-§8 で確定）。

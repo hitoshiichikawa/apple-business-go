@@ -170,7 +170,7 @@ scope=<business.api | school.api>
 | GET | `/v1/configurations/{id}` | 構成詳細 |
 | GET | `/v1/auditEvents` | 監査イベント（範囲・絞り込みクエリあり） |
 
-📄 `auditEvents` のクエリ（DocC で確定）: `filter[startTimestamp]`（✅ 必須。無いと 400）/ `filter[endTimestamp]`（ISO8601）, `filter[actorId]`, `filter[subjectId]`, `filter[type]`（いずれも 1 値のみ。`type` は `AuditEventType` の 50 値。✅ API 2.6 追加値 `ROLE_UPDATED` を渡して 200 を確認、demo 2026-10-14）, `fields[auditEvents]`, `limit`（≤1000）, `cursor`。
+📄 `auditEvents` のクエリ（DocC で確定）: `filter[startTimestamp]` / `filter[endTimestamp]`（✅ 両方必須。どちらかが無いと 400。`filter[endTimestamp]` は 2026-11-06 確認。ISO8601）, `filter[actorId]`, `filter[subjectId]`, `filter[type]`（いずれも 1 値のみ。`type` は `AuditEventType` の 53 値。✅ API 2.6 追加値 `ROLE_UPDATED` を渡して 200 を確認、demo 2026-10-14）, `fields[auditEvents]`, `limit`（≤1000）, `cursor`。
 > 旧記載の snake_case 名（`start_timestamp` / `actor_id` / `event_type` 等）は ❓二次情報由来の誤りだったため訂正。
 
 ### 3.6 Webhooks（📄 API 2.8、2026-11-04 追加）
@@ -456,7 +456,7 @@ Package.Attributes: `name` / `url` / `hash` / `bundleIds`(`[string]`) / `descrip
 - 固有: `eventDataPropertyKey` が示すキー（例 `eventDataDeviceAssignedToServer`）にイベント固有データ。
   例: `AuditEventDeviceAssignedToServer` = `{ serialNumber, targetServerName }`。
 - `AuditEventType` は 50 種（📄 API 2.6、2026-09-24 で `ROLE_*` / `IDP_*` / `DOMAIN_FEDERATION_*` / `ACCOUNT_IMAGE_*` など 17 種追加）。各 eventData のフィールドは `docs/apple-business-api-datatypes.md` §4 に集約。
-- クエリ: **`filter[startTimestamp]` が必須**（✅ 未指定で 400）。`filter[endTimestamp]` と併用、ISO8601。SDK は `ListRange` で付与。📄 他に `filter[actorId]` / `filter[subjectId]` / `filter[type]`（各 1 値）/ `fields[auditEvents]` / `limit`(≤1000) / `cursor`。
+- クエリ: **`filter[startTimestamp]` と `filter[endTimestamp]` が必須**（✅ どちらかが無いと 400。2026-11-06 確認）。ISO8601。SDK は `ListRange` で付与（`end` がゼロ値なら現在時刻）。📄 他に `filter[actorId]` / `filter[subjectId]` / `filter[type]`（各 1 値）/ `fields[auditEvents]` / `limit`(≤1000) / `cursor`。
 → SDK `auditevents.Attributes` は共通項目を型付きで保持し、`EventData`(生JSON) を `Payload(&v)` で個別型へデコード。
   主要イベント型（`DeviceAssignedToServer` 等）を同梱。
 （前回「純ユニオン」と記載したが、`AuditEventCommonAttributes` の存在を確認し訂正。参照実装のフラットな

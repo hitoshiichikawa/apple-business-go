@@ -193,7 +193,7 @@
 
 ## 4. Audit Events（`/v1/auditEvents`）
 
-> **クエリ（必須）**: `filter[startTimestamp]` が必須（✅ 未指定だと 400 `PARAMETER_ERROR.REQUIRED`）。通常は `filter[endTimestamp]` と併用し、いずれも ISO8601(RFC3339, UTC)。SDK は `auditevents.ListRange(start, end, q)` で付与。
+> **クエリ（必須）**: `filter[startTimestamp]` と `filter[endTimestamp]` の**両方が必須**（✅ どちらかが無いと 400 `PARAMETER_ERROR.REQUIRED`。`filter[endTimestamp]` の必須は 2026-11-06 確認。未来の日時も受け付ける）。いずれも ISO8601(RFC3339, UTC)。SDK は `auditevents.ListRange(start, end, q)` で付与（`end` がゼロ値なら現在時刻）。
 > 📄 その他のクエリ（DocC）: `filter[actorId]` / `filter[subjectId]` / `filter[type]`（いずれも **1 値のみ**。`filter[type]` は `AuditEventType` の値）、`fields[auditEvents]`（共通項目名と `eventData<Event>` キー名）、`limit`（≤1000）、`cursor`。
 
 「Dictionaries」69件はすべて監査イベント機構（基底 `AuditEvent` + 各 `AuditEvent<Event>Attributes` ラッパー + 各 `AuditEvent<Event>` ペイロード）。

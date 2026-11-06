@@ -10,6 +10,9 @@
 - `examples/dump-all` に Webhooks 節（読み取りのみ）、`livetest` に `TestWebhook_Lifecycle`（作成〜削除。書き込みあり）を追加（#59）。
 - **Webhook 通知の受信補助**（#60）: HTTP サーバは持たずに、受け取った本文とヘッダだけで使える関数を `webhooks` に追加。`VerifySignature(secret, body, signature)`（`x-apple-signature: hmacsha256=<hex>` を定数時間で比較。失敗は `ErrInvalidSignature`）、`VerifyRequest(r, secret, maxBytes)`（本文を上限付き〈既定 1 MiB〉で読み、検証し、`r.Body` を戻す。超過は `ErrBodyTooLarge`）、`ParseNotification(body)`（`{data:{type,id,version,attributes,relationships}}`。`DecodeAttributes` / `Instance` / `EventType` / `IsPing`）。通知の種類の定数 `Notification*`（camelCase。購読用の `EventType*` とは表記が異なるため `EventType()` で対応づける）と、属性型 `DeviceChanged` / `AssignedServerChanged` / `WarrantyChanged` / `PingCreated`。📄 公式記事の HMAC テストベクタと各イベントの例で単体テスト。署名の対象は本文だけでタイムスタンプが無いため、再送の重複除去は `Notification.ID` で利用者が行う。✅ 実テナント（2026-11-06）で、配信一覧の ping イベントの `payload` を `ParseNotification` で解析できることを確認。ただし公式記事の例と違い、その payload には `id` が無かった（デバイスのイベントの `id` は実機未確認）。Apple からの実際の POST での署名検証は、受け口が無いため未確認（📄 テストベクタのみ）。
 
+### Fixed
+- **`auditevents.ListRange` が `end` のゼロ値で 400 になる不具合を修正**（#63）: 実際の API は `filter[endTimestamp]` も必須（✅ 2026-11-06。省くと 400 `PARAMETER_ERROR.REQUIRED`）だが、`ListRange` は `end` がゼロ値のときこれを送っていなかった。ゼロ値なら現在時刻を送るように変更（API は未来の日時も受け付けるため、時計のずれの影響はない）。**挙動の変更**: これまでエラーになっていた呼び出しが、開始時刻から現在までの監査イベントを返すようになる。`List` / `ListRange` の doc コメントと docs の「`filter[endTimestamp]` は任意」という記述も訂正。
+
 ## [0.14.1] - 2026-11-06
 
 ### Fixed
