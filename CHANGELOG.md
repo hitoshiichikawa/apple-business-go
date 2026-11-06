@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-11-06
+
 ### Fixed
 - Activation Lock ステータス取得の API バージョン表記を、公式の API changelog（developer.apple.com）に合わせて「Apple Business API 2.6、2026-09-16」から「API 2.5（Apple School Manager API 1.7）、2026-09-15」に訂正。`devices.ActivationLockStatus` などの doc コメント、README、docs、ROADMAP、examples、livetest、CHANGELOG の [0.13.0] 項が対象。監査イベントの拡充（API 2.6）の日付も同 changelog に合わせて 2026-09-23 → 2026-09-24 に訂正。以前の日付は Apple Business リリースノート（利用者向け）の掲載日で、`docs/apple-business-api-datatypes.md` では両方を併記した。これにより、同ファイルで ❓未確認としていた「2.5 / 2.6 のどちらで入ったか」も解消。コードの動作は変わらない（v0.13.0 のタグメッセージの「API 2.6」は変更しない）。
 
