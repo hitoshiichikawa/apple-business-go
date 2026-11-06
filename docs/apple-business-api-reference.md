@@ -185,7 +185,7 @@ scope=<business.api | school.api>
 | POST | `/v1/webhookDeliveries` | 再配信（201）。`relationships.template.data` = `{type: webhookDeliveries, id}` |
 | POST | `/v1/webhookPings` | ping（201）。`relationships.webhook.data` = `{type: webhooks, id}`。Apple が `webhookPingCreated` を送る |
 
-📄 受信: Apple は登録した URL に HTTPS POST で通知する。本文は `{data:{type, id, version, attributes, relationships}}` で、`type` は `orgDeviceAttributeChanged` のような camelCase（購読時の `eventTypes` とは表記が異なる）。署名はヘッダ `x-apple-signature: hmacsha256=<hex>`（本文を `secret` で HMAC-SHA256 した 16 進）。再送の方針やタイムスタンプは公式に記載がなく、再配信は `webhookDeliveries` で依頼する。SDK は `webhooks` パッケージ（管理 API）。受信の補助（署名検証・本文の解析）は #60 で対応予定。
+📄 受信: Apple は登録した URL に HTTPS POST で通知する。本文は `{data:{type, id, version, attributes, relationships}}` で、`type` は `orgDeviceAttributeChanged` のような camelCase（購読時の `eventTypes` とは表記が異なる）。署名はヘッダ `x-apple-signature: hmacsha256=<hex>`（本文を `secret` で HMAC-SHA256 した 16 進）。再送の方針やタイムスタンプは公式に記載がなく、再配信は `webhookDeliveries` で依頼する。SDK は `webhooks` パッケージ。管理 API に加えて、受信の補助として `VerifySignature` / `VerifyRequest`（署名検証。公式記事のテストベクタで検証済み）と `ParseNotification`（本文の解析。通知の種類の定数 `Notification*` と購読用の `EventType*` の対応、各イベントの属性型）を提供する（#60）。受信サーバ本体はアプリ側の責務。
 
 ✅ 実テナント（2026-11-06、`livetest` の `TestWebhook_Lifecycle`）: 作成 → 取得 → 更新 → ping → 配信一覧（`include=event`）→ 再配信 → 削除（削除後の取得は 404）。名前解決できない URL への ping の配信は `FAILED` で、`errorMessage` に Apple の送信プロキシのエラーが入り、`response` は無い。ping の ID は、配信が指すイベントの ID と同じだった。再配信は `PENDING`・`redelivery=true` の新しい配信として返る。監査イベントは `WEBHOOK_CREATED` / `WEBHOOK_UPDATED` / `WEBHOOK_DELETED`（カテゴリ `WEBHOOK_ACTIVITY`、`subjectType=WEBHOOK`、`subjectId`＝Webhook の ID）が記録された。
 

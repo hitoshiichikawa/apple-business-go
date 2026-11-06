@@ -552,6 +552,18 @@ func TestWebhook_Lifecycle(t *testing.T) {
 		t.Logf("delivery %s: state=%s redelivery=%v httpStatus=%d error=%q event=%s (included=%v isPing=%v)",
 			d.ID, d.Attributes.DeliveryState, d.Attributes.Redelivery, status, d.Attributes.ErrorMessage,
 			d.EventID(), included, ev.Attributes.IsPingEvent)
+		if included && ev.Attributes.IsPingEvent {
+			// 配信一覧のイベントの payload は通知本文そのもので、ParseNotification で読めるはず。
+			n, err := webhooks.ParseNotification([]byte(ev.Attributes.Payload))
+			if err != nil {
+				t.Errorf("ParseNotification(event %s payload): %v (payload=%s)", ev.ID, err, ev.Attributes.Payload)
+			} else {
+				t.Logf("ping payload parsed: type=%s id=%s version=%d isPing=%v", n.Type, n.ID, n.Version, n.IsPing())
+				if !n.IsPing() {
+					t.Errorf("ping payload type = %q, want %q", n.Type, webhooks.NotificationWebhookPingCreated)
+				}
+			}
+		}
 	}
 	if len(list.Deliveries) == 0 {
 		t.Errorf("no delivery was recorded for the ping within 60s")
