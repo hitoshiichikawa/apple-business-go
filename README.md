@@ -124,6 +124,26 @@ if err == nil && st.Attributes.IsLocked {
 }
 ```
 
+## Quickstart (filter devices, API 2.7+)
+
+Narrow `GET /v1/orgDevices` on the server side. Multiple values in a field are
+sent comma-separated, and times are sent in UTC (RFC 3339). Zero-value fields
+are omitted.
+
+```go
+f := devices.DeviceFilter{
+    ProductFamilies:    []string{devices.ProductFamilyIPhone, devices.ProductFamilyIPad},
+    Statuses:           []string{devices.DeviceStatusAssigned},
+    AddedToOrgDateTime: devices.TimeFilter{GTE: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)},
+}
+devs, err := svc.ListFiltered(ctx, f, nil)
+
+// iterate page by page instead:
+for d, err := range applebusiness.ListSeq[devices.DeviceAttributes](ctx, c, "/v1/orgDevices", f.Query(nil)) {
+    // ...
+}
+```
+
 Runnable samples live in [`examples/`](./examples) (`list-devices`, `assign-devices`, `smoke-test`, `dump-all`, `write-test`).
 For a connectivity check use [`smoke-test`](./examples/smoke-test); to dump every read endpoint use [`dump-all`](./examples/dump-all).
 
@@ -275,6 +295,7 @@ if applebusiness.IsRateLimited(err) && errors.As(err, &apiErr) {
 | Package | Methods | API |
 |---|---|---|
 | `devices` | `List` / `Get` | `/v1/orgDevices`, `/v1/orgDevices/{id}` |
+| `devices` | `ListFiltered` (`DeviceFilter`) | `/v1/orgDevices` with `filter[...]` (API 2.7+) |
 | `devices` | `AssignedServer` / `AppleCareCoverage` / `ActivationLockStatus` | `/v1/orgDevices/{id}/assignedServer`, `.../appleCareCoverage`, `.../activationLockStatus` (API 2.6+) |
 | `devices` | `ListMdmServers` / `GetMdmServer` / `CreateMdmServer` / `UpdateMdmServer` / `DeleteMdmServer` / `MdmServerDevices` | `/v1/mdmServers(/{id})`, `/v1/mdmServers/{id}/relationships/devices` (CRUD: API 2.1+) |
 | `devices` | `ListMdmDevices` / `MdmDeviceDetails` | `/v1/mdmDevices`, `/v1/mdmDevices/{id}/details` |

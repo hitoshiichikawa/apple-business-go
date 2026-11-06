@@ -144,6 +144,88 @@ func TestReads_SucceedOrPermission403(t *testing.T) {
 			t.Fatalf("devices.ActivationLockStatus: %v", err)
 		}
 	})
+	// orgDevices の絞り込み（API 2.7、2026-10-29 追加）。各 filter[...] を渡して 200 になり、
+	// 返った端末（1 ページ目、最大 100 件）が条件を満たすことを確かめる。全件は辿らない。
+	t.Run("devices.ListFiltered(API 2.7)", func(t *testing.T) {
+		ctx := ctxFor(t)
+		firstPage := func(f devices.DeviceFilter) ([]devices.Device, error) {
+			var out []devices.Device
+			for d, err := range applebusiness.ListSeq[devices.DeviceAttributes](ctx, c, "/v1/orgDevices", f.Query(url.Values{"limit": {"100"}})) {
+				if err != nil {
+					return out, err
+				}
+				out = append(out, d)
+				if len(out) >= 100 {
+					break
+				}
+			}
+			return out, nil
+		}
+		seed, err := firstPage(devices.DeviceFilter{})
+		switch {
+		case applebusiness.IsForbidden(err):
+			t.Logf("devices.List: 403 (permission) — %v", err)
+			return
+		case err != nil:
+			t.Fatalf("devices.List: %v", err)
+		case len(seed) == 0:
+			t.Skip("no devices in the organization")
+		}
+		first := seed[0].Attributes
+
+		for _, st := range []string{devices.DeviceStatusAssigned, devices.DeviceStatusUnassigned} {
+			got, err := firstPage(devices.DeviceFilter{Statuses: []string{st}})
+			if err != nil {
+				t.Fatalf("filter[status]=%s: %v", st, err)
+			}
+			for _, d := range got {
+				if d.Attributes.Status != st {
+					t.Errorf("filter[status]=%s returned %s with status %q", st, d.ID, d.Attributes.Status)
+				}
+			}
+			t.Logf("filter[status]=%s: %d device(s) on the first page", st, len(got))
+		}
+
+		got, err := firstPage(devices.DeviceFilter{SerialNumbers: []string{first.SerialNumber}})
+		if err != nil {
+			t.Fatalf("filter[serialNumber]: %v", err)
+		}
+		if len(got) != 1 || got[0].Attributes.SerialNumber != first.SerialNumber {
+			ids := make([]string, 0, len(got))
+			for _, d := range got {
+				ids = append(ids, d.ID)
+			}
+			t.Errorf("filter[serialNumber]=%s returned %d device(s): %v", first.SerialNumber, len(got), ids)
+		}
+
+		got, err = firstPage(devices.DeviceFilter{ProductFamilies: []string{first.ProductFamily}})
+		if err != nil {
+			t.Fatalf("filter[productFamily]=%s: %v", first.ProductFamily, err)
+		}
+		for _, d := range got {
+			if d.Attributes.ProductFamily != first.ProductFamily {
+				t.Errorf("filter[productFamily]=%s returned %s with productFamily %q", first.ProductFamily, d.ID, d.Attributes.ProductFamily)
+			}
+		}
+		t.Logf("filter[productFamily]=%s: %d device(s) on the first page", first.ProductFamily, len(got))
+
+		added, perr := time.Parse(time.RFC3339, first.AddedToOrgDateTime)
+		if perr != nil {
+			t.Logf("skip filter[addedToOrgDateTime][GTE]: cannot parse %q: %v", first.AddedToOrgDateTime, perr)
+			return
+		}
+		gte := added.Truncate(time.Second) // フィルタは秒精度で送る
+		got, err = firstPage(devices.DeviceFilter{AddedToOrgDateTime: devices.TimeFilter{GTE: gte}})
+		if err != nil {
+			t.Fatalf("filter[addedToOrgDateTime][GTE]: %v", err)
+		}
+		for _, d := range got {
+			if at, perr := time.Parse(time.RFC3339, d.Attributes.AddedToOrgDateTime); perr == nil && at.Before(gte) {
+				t.Errorf("filter[addedToOrgDateTime][GTE]=%s returned %s added at %s", gte.Format(time.RFC3339), d.ID, d.Attributes.AddedToOrgDateTime)
+			}
+		}
+		t.Logf("filter[addedToOrgDateTime][GTE]=%s: %d device(s) on the first page", gte.Format(time.RFC3339), len(got))
+	})
 	read("devices.ListMdmServers", func(ctx context.Context) error { _, e := devices.New(c).ListMdmServers(ctx, small); return e })
 	read("devices.ListMdmDevices", func(ctx context.Context) error { _, e := devices.New(c).ListMdmDevices(ctx, small); return e })
 	read("people.ListUsers", func(ctx context.Context) error { _, e := people.New(c).ListUsers(ctx, small); return e })

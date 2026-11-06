@@ -121,7 +121,7 @@ scope=<business.api | school.api>
 ### 3.2 デバイス
 | メソッド | パス | 用途 |
 |---|---|---|
-| GET | `/v1/orgDevices` | デバイス一覧 |
+| GET | `/v1/orgDevices` | デバイス一覧。📄 **API 2.7+**（ASM API は 1.8+、2026-10-29 追加）で絞り込みクエリ: `filter[serialNumber]` / `filter[orderNumber]` / `filter[productFamily]` / `filter[purchaseSourceType]` / `filter[status]`（いずれも複数値はカンマ区切り）と `filter[addedToOrgDateTime]` / `filter[orderDateTime]`（値の指定に加え `[GT]` / `[GTE]` / `[LT]` / `[LTE]` の範囲指定）。他に `fields[orgDevices]` / `limit`（≤1000）/ `cursor`。SDK は `ListFiltered` / `DeviceFilter` |
 | GET | `/v1/orgDevices/{id}` | デバイス詳細 |
 | GET | `/v1/orgDevices/{id}/relationships/assignedServer` | 割り当て先MDM（リレーション/IDのみ） |
 | GET | `/v1/orgDevices/{id}/assignedServer` | 割り当て先MDM（詳細情報） |
