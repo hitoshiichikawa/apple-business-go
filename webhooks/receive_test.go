@@ -224,3 +224,19 @@ func TestParseNotificationFromDeliveredEventPayload(t *testing.T) {
 		t.Fatalf("notification: %+v", n)
 	}
 }
+
+// 実機（2026-11-06）の配信一覧で返った ping の payload。公式記事の例と違い id が無い。
+func TestParseNotificationLivePingWithoutID(t *testing.T) {
+	payload := `{ "data" : { "type" : "webhookPingCreated", "version" : 1, "attributes" : { "createdDateTime" : "2026-11-06T02:18:13.324391366Z" } } }`
+	n, err := ParseNotification([]byte(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !n.IsPing() || n.ID != "" || n.Version != 1 {
+		t.Fatalf("notification: %+v", n)
+	}
+	var p PingCreated
+	if err := n.DecodeAttributes(&p); err != nil || p.CreatedDateTime != "2026-11-06T02:18:13.324391366Z" {
+		t.Fatalf("PingCreated: %+v (err=%v)", p, err)
+	}
+}

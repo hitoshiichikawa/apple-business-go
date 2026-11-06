@@ -169,7 +169,8 @@ list, err := svc.Deliveries(ctx, wh.ID, time.Now().Add(-time.Hour), time.Time{},
 
 In the HTTP handler that receives the notifications, verify the signature and
 parse the body (the package does not run a server). The signature covers the
-body only and has no timestamp, so drop duplicates by the notification ID.
+body only and has no timestamp, so drop duplicates by the notification ID where
+it is set (the ping payload has none).
 
 ```go
 body, err := webhooks.VerifyRequest(r, secret, 0) // reads up to 1 MiB, checks x-apple-signature

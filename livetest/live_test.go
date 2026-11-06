@@ -558,7 +558,7 @@ func TestWebhook_Lifecycle(t *testing.T) {
 			if err != nil {
 				t.Errorf("ParseNotification(event %s payload): %v (payload=%s)", ev.ID, err, ev.Attributes.Payload)
 			} else {
-				t.Logf("ping payload parsed: type=%s id=%s version=%d isPing=%v", n.Type, n.ID, n.Version, n.IsPing())
+				t.Logf("ping payload parsed: type=%s id=%q version=%d isPing=%v (raw payload: %s)", n.Type, n.ID, n.Version, n.IsPing(), strings.Join(strings.Fields(ev.Attributes.Payload), " "))
 				if !n.IsPing() {
 					t.Errorf("ping payload type = %q, want %q", n.Type, webhooks.NotificationWebhookPingCreated)
 				}

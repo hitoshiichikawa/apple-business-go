@@ -43,7 +43,8 @@ var (
 // ErrInvalidSignature otherwise.
 //
 // The signature covers the body only and carries no timestamp, so a valid
-// notification can be replayed; drop duplicates by Notification.ID.
+// notification can be replayed; drop duplicates by Notification.ID where it is
+// present.
 func VerifySignature(secret string, body []byte, signature string) error {
 	sig := strings.TrimSpace(signature)
 	if sig == "" {
@@ -115,9 +116,12 @@ var notificationEventTypes = map[string]string{
 // Notification is a webhook notification: the data object of the JSON body
 // that Apple POSTs to a webhook's URL. Every event has the same shape; the
 // event-specific values are in Attributes (decode them with DecodeAttributes).
+// Use ID to drop duplicate deliveries when it is set; the ping payload
+// returned by Deliveries had no id (observed 2026-11-06), so do not rely on it
+// being present.
 type Notification struct {
 	Type          string                              `json:"type"`    // Notification* values
-	ID            string                              `json:"id"`      // unique per event; use it to drop duplicates
+	ID            string                              `json:"id"`      // unique per event per the DocC; empty in the ping payload observed on 2026-11-06
 	Version       int                                 `json:"version"` // version of the event's schema
 	Attributes    json.RawMessage                     `json:"attributes,omitempty"`
 	Relationships map[string]NotificationRelationship `json:"relationships,omitempty"`
