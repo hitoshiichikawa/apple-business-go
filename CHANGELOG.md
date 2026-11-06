@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-06
+
 ### Added
 - **Webhook 管理 API（Apple Business API 2.8、2026-11-04 追加）**（#59）: `webhooks` パッケージを新設。`List` / `Get` / `Create` / `Update` / `Delete`（`/v1/webhooks`）、`Deliveries`（`/v1/webhooks/{id}/deliveries`。作成日時の範囲 `from` / `to` は必須の引数（DocC では任意だが、実機は両方が無いと 400、未来の日時は 409。✅ 2026-11-06）。`to` がゼロなら現在時刻。`DeliveryFilter` で状態を指定でき、`IncludeEvents` で送ったイベントも取得。`included` はパッケージ内の応答型で受け、`DeliveryList.Event` で引ける）、`Redeliver`（`POST /v1/webhookDeliveries`）、`Ping`（`POST /v1/webhookPings`）。型 `Webhook` / `Delivery` / `Event`、定数 `EventType*`（購読できる 4 種）/ `DeliveryState*`。`secret` は書き込み専用で応答に含まれない。📄 公式 DocC の定義どおり。✅ 実テナント（2026-11-06、`livetest`）で作成〜削除・ping・配信一覧・再配信を確認（名前解決できない URL への ping は `FAILED` と `errorMessage` で記録される）。
 - `auditevents` に API 2.8 の監査イベントを追加（#59）: `TypeWebhookCreated` / `TypeWebhookUpdated` / `TypeWebhookDeleted`（計 53 種）、`CategoryWebhookActivity`、`SubjectWebhook`、ペイロード型 `Webhook`（WEBHOOK_CREATED / WEBHOOK_UPDATED 共用）。✅ 実機（2026-11-06）で 3 種とも記録されることを確認。`enabled` は DocC どおり文字列（`"true"`）で、`WEBHOOK_UPDATED` には変更した属性だけが入る。
