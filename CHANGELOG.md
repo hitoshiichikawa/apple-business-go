@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Added
+- **orgDevices の絞り込み（Apple Business API 2.7 / Apple School Manager API 1.8、2026-10-29 追加）**（#55）: `devices.ListFiltered(ctx, f, q)` と `devices.DeviceFilter`（`SerialNumbers` / `OrderNumbers` / `ProductFamilies` / `PurchaseSourceTypes` / `Statuses` / `AddedToOrgDateTime` / `OrderDateTime`）を追加。`DeviceFilter.Query(base)` は `filter[...]` を設定した新しい `url.Values` を返し（`base` は変更しない）、`List` や `applebusiness.ListSeq` にもそのまま渡せる。複数値は公式どおりカンマ区切りの 1 パラメータで送る。日時は `TimeFilter`（`Equal` / `GT` / `GTE` / `LT` / `LTE`。UTC の RFC 3339、秒精度）で、`filter[addedToOrgDateTime][GTE]` などの範囲指定にも対応。📄 クエリ名・値は公式 DocC（`get-org-devices`）の定義どおり。割り当て状態のキーは `filter[status]`。✅ 実テナント（2026-11-06、`livetest`）で、`filter[status]`（13 台が ASSIGNED 11 台 / UNASSIGNED 2 台に分かれる）・`filter[serialNumber]`（1 値、カンマ区切りの 2 値）・`filter[productFamily]`（端末の無い `Mac` で 0 台＝無視されていない）・`filter[addedToOrgDateTime][GTE]`（10 年後で 0 台）が効くことを確認。`filter[orderNumber]` / `filter[purchaseSourceType]` / `filter[orderDateTime]`、`[GT]` / `[LT]` / `[LTE]`、演算子なしの日時指定は未確認（📄 のみ）。
+- `devices` に列挙値の定数を追加（#55）: `ProductFamily*`（`Mac` / `iPhone` / `iPad` / `iPod` / `AppleTV` / `Watch` / `Vision`。`DeviceAttributes.ProductFamily` と同じ表記で、MDM サーバ用の大文字の `MdmProductFamily*` とは異なる）、`PurchaseSourceType*`（`APPLE` / `RESELLER` / `MANUALLY_ADDED`）、`DeviceStatus*`（`ASSIGNED` / `UNASSIGNED`）。
+- `livetest` に orgDevices フィルタの実機確認を追加（#55）: `filter[status]` / `filter[serialNumber]`（1 値、カンマ区切りの 2 値）/ `filter[productFamily]`（1 台目と同じファミリ、別のファミリ）/ `filter[addedToOrgDateTime][GTE]`（1 台目の追加日時、10 年後）を渡して 200 になり、返った端末（1 ページ目）が条件を満たすことを確かめる。別ファミリと 10 年後の確認は、Apple がフィルタを無視して全件を返していないことを見分けるためのもの。
+
 ## [0.13.0] - 2026-10-20
 
 ### Added

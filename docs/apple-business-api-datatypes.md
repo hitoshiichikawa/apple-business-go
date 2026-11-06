@@ -55,6 +55,7 @@
 `isMdmMigrationCapable`(boolean, API 2.3+), `mdmMigrationStatus`(MdmMigrationStatus, API 2.3+),
 `mdmMigrationDeadlineDateTime`(date-time, API 2.3+)
 > 移行系フィールド（API 2.3、2026-08-12）: `isMdmMigrationCapable`＝移行可否、`mdmMigrationStatus`／`mdmMigrationDeadlineDateTime` は移行リクエスト済みの場合のみ設定される。
+> 📄 一覧の絞り込みクエリ（API 2.7+ / ASM 1.8+、2026-10-29）: `filter[serialNumber]` / `filter[orderNumber]` / `filter[productFamily]`（`Mac` `iPhone` `iPad` `iPod` `AppleTV` `Watch` `Vision`）/ `filter[purchaseSourceType]`（`APPLE` `RESELLER` `MANUALLY_ADDED`）/ `filter[status]`（`ASSIGNED` `UNASSIGNED`）は複数値をカンマ区切り。`filter[addedToOrgDateTime]` / `filter[orderDateTime]` は値の指定に加え `[GT]` `[GTE]` `[LT]` `[LTE]` の範囲指定が可能。ほかに `fields[orgDevices]`、`limit`（≤1000）、`cursor`。SDK は `devices.ListFiltered` / `DeviceFilter`（定数 `ProductFamily*` / `PurchaseSourceType*` / `DeviceStatus*`）。
 
 ### MdmDevice.Attributes（`/v1/mdmDevices`）
 > Apple の組み込みデバイス管理サービス（Apple MDM）に登録されたデバイス。`GET /v1/mdmDevices`（クエリ: `fields[mdmDevices]`, `limit`）で一覧取得。SDK は `ListMdmDevices`。

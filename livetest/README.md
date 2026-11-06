@@ -28,7 +28,7 @@ go test -tags livetest ./livetest -v
 | テスト | 確認する応答 |
 |---|---|
 | `TestAuth_AccessTokenSucceeds` | トークン取得が成功する |
-| `TestReads_SucceedOrPermission403` | 各読み取り（devices / activationLockStatus（API 2.6、観測値を記録） / mdmServers / mdmDevices / users / userGroups / orgunits / apps / packages / configurations / blueprints / auditEvents（`filter[type]` に API 2.6 の新種別を渡す読み取りを含む））が成功する（権限 403 はログのみ） |
+| `TestReads_SucceedOrPermission403` | 各読み取り（devices / orgDevices の絞り込み（API 2.7。`filter[status]` / `filter[serialNumber]`（1 値・カンマ区切り 2 値） / `filter[productFamily]`（同じ・別のファミリ） / `filter[addedToOrgDateTime][GTE]`（1 台目の日時・10 年後で 0 台）で返った端末が条件を満たすこと） / activationLockStatus（API 2.6、観測値を記録） / mdmServers / mdmDevices / users / userGroups / orgunits / apps / packages / configurations / blueprints / auditEvents（`filter[type]` に API 2.6 の新種別を渡す読み取りを含む））が成功する（権限 403 はログのみ） |
 | `TestGet_BogusID_IsNotFound` | 存在しない id の取得が 404（`IsNotFound`）。configurations / blueprints / activationLockStatus（存在しないシリアル） |
 | `TestBlueprintCreate_Validation` | メンバー無しの作成 → 409 `MISSING_MEMBERS`／リソース無しの作成 → 409 `MISSING_RESOURCES` |
 | `TestBlueprintRelationships` | `AddTo`/`RemoveFrom`(apps) 成功、`Replace`(apps / configurations) → 403 `FORBIDDEN_ERROR`（REPLACE 非対応）。`Replace`(orgDevices / packages) は結果を記録のみ |
