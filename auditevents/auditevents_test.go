@@ -351,7 +351,7 @@ func TestListRangePassesTypeFilter(t *testing.T) {
 	}
 }
 
-// 50 種の Type* 定数が重複なく揃っていること（DocC の AuditEventType と同数）。
+// 53 種の Type* 定数が重複なく揃っていること（DocC の AuditEventType と同数）。
 func TestTypeConstantsAreUniqueAndComplete(t *testing.T) {
 	all := []string{
 		TypeDeviceAddedToOrg, TypeDeviceRemovedFromOrg, TypeDeviceAssignedToServer, TypeDeviceUnassignedFromServer,
@@ -370,9 +370,11 @@ func TestTypeConstantsAreUniqueAndComplete(t *testing.T) {
 		TypeBatchPasswordResetInitiated, TypeExternalAccountInvited, TypeAccountImageSet, TypeAccountImageReplaced,
 		TypeAccountImageRemoved, TypeIDPCreated, TypeIDPUpdated, TypeIDPDeleted, TypeIDPAccountSyncEnabled,
 		TypeIDPAccountSyncDisabled, TypeAppleServicesSettingsUpdated, TypeAccountPasswordChanged,
+		// API 2.8
+		TypeWebhookCreated, TypeWebhookUpdated, TypeWebhookDeleted,
 	}
-	if len(all) != 50 {
-		t.Fatalf("len = %d, want 50", len(all))
+	if len(all) != 53 {
+		t.Fatalf("len = %d, want 53", len(all))
 	}
 	seen := make(map[string]bool, len(all))
 	for _, v := range all {

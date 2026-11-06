@@ -9,7 +9,7 @@
 
 ---
 
-## 1. Type Aliases（列挙値）— 25件
+## 1. Type Aliases（列挙値）— 26件（API 2.8 で `WebhookEventType` が追加）
 
 | 型 | 値 |
 |---|---|
@@ -30,14 +30,15 @@
 | `LostModeStatus` | `ENABLED`, `DISABLED` |
 | `ActivationLockType`（API 2.5+） | `MDM`（デバイス管理サービスによるロック）, `USER`（個人の Apple Account へのロック）, `NONE`（未ロック） |
 | `AuditEventActorType` | `USER`, `API_USER`, `SYSTEM` |
-| `AuditEventSubjectType` | `ORGANIZATION`, `USER`, `LOCATION`, `DEVICE`, `COLLECTION`, `DEVICE_MANAGEMENT_SETTING`, `SUBSCRIPTION`, `DOMAIN`, `API_USER`, `ROLE`（API 2.6+）, `IDP`（API 2.6+）, `INVITATION`（API 2.6+） |
-| `AuditEventCategory` | `ORGANIZATION`, `ACCOUNT_ACTIVITY`, `DEVICE_INVENTORY`, `PURCHASING`, `DEVICE_MANAGEMENT`, `ACCESS_MANAGEMENT`（API 2.6+）。※ ✅ 実機は `DEVICE_ASSIGNED_TO_SERVER` で DocC に無い `DEVICE_ACTIVITY` を返した（2026-06 観測）。未知の値を前提に扱うこと |
+| `AuditEventSubjectType` | `ORGANIZATION`, `USER`, `LOCATION`, `DEVICE`, `COLLECTION`, `DEVICE_MANAGEMENT_SETTING`, `SUBSCRIPTION`, `DOMAIN`, `API_USER`, `ROLE`（API 2.6+）, `IDP`（API 2.6+）, `INVITATION`（API 2.6+）, `WEBHOOK`（API 2.8+） |
+| `AuditEventCategory` | `ORGANIZATION`, `ACCOUNT_ACTIVITY`, `DEVICE_INVENTORY`, `PURCHASING`, `DEVICE_MANAGEMENT`, `ACCESS_MANAGEMENT`（API 2.6+）, `WEBHOOK_ACTIVITY`（API 2.8+）。※ ✅ 実機は `DEVICE_ASSIGNED_TO_SERVER` で DocC に無い `DEVICE_ACTIVITY` を返した（2026-06 観測）。未知の値を前提に扱うこと |
 | `AuditEventOutcome` | `SUCCESS`, `FAILURE` |
 | `AuditEventPurchaseSourceType` | `APPLE`, `MANUALLY_ADDED`, `RESELLER` |
 | `AuditEventReleaseEntityType` | `USER`, `MDM`, `RESELLER`, `API`, `REPLACEMENT` |
 | `AuditEventIdpVendorName`（API 2.6+） | `GOOGLE`, `MICROSOFT`, `MICROSOFT_OIDC`（OpenID Connect の Microsoft）, `GENERIC_IDP`（汎用/カスタム IdP） |
 | `AuditEventIdpProtocol`（API 2.6+） | `OIDC`, `SAML` |
-| `AuditEventType` | §4.2 を参照（50種。API 2.6 で 17 種追加） |
+| `WebhookEventType`（API 2.8+） | `ORG_DEVICE_ATTRIBUTE_CHANGED`, `ORG_DEVICE_ATTRIBUTE_MIGRATION_DETAILS_CHANGED`, `ORG_DEVICE_RELATIONSHIP_ASSIGNED_SERVER_CHANGED`, `ORG_DEVICE_RELATIONSHIP_WARRANTY_CHANGED`（Webhook が購読できるイベント。ping は含まない） |
+| `AuditEventType` | §4.2 を参照（53種。API 2.6 で 17 種、API 2.8 で 3 種追加） |
 
 ---
 
@@ -137,6 +138,15 @@
   - ⚠️ DocC スキーマは `byte`(Base64) と表記するが、**実機は生 XML をそのまま要求**（Base64 化すると 400 `plist type mismatch`）。
     `PayloadContent` も**非空必須**（空配列は 400）。`examples/write-test` で確認。
 
+### Webhook.Attributes（`/v1/webhooks`、API 2.8）
+> 📄 **API 2.8（2026-11-04）で追加**。`name`(string), `enabled`(boolean), `eventTypes`([WebhookEventType]), `url`(uri), `createdDateTime`(date-time), `updatedDateTime`(date-time)。作成・更新では加えて `secret`(string) を送る（作成時は `name` / `enabled` / `eventTypes` / `secret` / `url` がすべて必須、更新時はすべて任意）。**`secret` は書き込み専用で応答には含まれない**。`relationships.deliveries` あり。SDK は `webhooks.Webhook`。
+
+### WebhookDelivery.Attributes（`/v1/webhooks/{id}/deliveries`、API 2.8）
+> 📄 `createdDateTime`(date-time), `deliveryState`(`SUCCEEDED` / `FAILED` / `PENDING`), `errorMessage`(string。HTTP 応答が無かったときのエラー), `redelivery`(boolean), `sentDateTime`(date-time), `request`{`url`}, `response`{`httpStatusCode`(integer), `body`(string。2xx 以外のときのみ)}。`relationships.event` が送った `WebhookEvent` を指す。クエリ: ✅ `filter[createdDateTimeAtOrAfter]` と `filter[createdDateTimeAtBefore]` は**両方必須**（DocC では任意だが、実機は片方でも欠けると 400 `PARAMETER_ERROR.REQUIRED`、未来の日時は 409 `ENTITY_ERROR.ATTRIBUTE.INVALID`。2026-11-06）/ `filter[deliveryState]`（複数値はカンマ区切り）/ `fields[webhookDeliveries]` / `fields[webhookEvents]` / `include=event` / `limit`(≤1000) / `cursor`。SDK は `webhooks.Delivery` / `Deliveries`。
+
+### WebhookEvent.Attributes（API 2.8）
+> 📄 `eventType`(WebhookEventType), `payload`(string＝送った通知本文の JSON 文字列), `isPingEvent`(boolean), `createdDateTime`(date-time)。配信一覧の `include=event` で `included` に入る。SDK は `webhooks.Event`。
+
 ### 補助オブジェクト
 - `UserPhoneNumber`: `phoneNumber`(string), `type`(UserPhoneNumberType)
 - `UserRoleOuMapping`: `roleName`(string), `ouId`(string)
@@ -147,7 +157,8 @@
 
 ### リソースオブジェクト
 `OrgDevice` / `MdmDevice` / `MdmDeviceDetail` / `MdmServer` / `OrgDeviceActivity` / `AppleCareCoverage` /
-`ActivationLockStatus`（API 2.5） / `User` / `UserGroup` / `OrganizationalUnit`（API 2.2） / `App` / `Package` / `Blueprint` / `Configuration`
+`ActivationLockStatus`（API 2.5） / `User` / `UserGroup` / `OrganizationalUnit`（API 2.2） / `App` / `Package` / `Blueprint` / `Configuration` /
+`Webhook` / `WebhookDelivery` / `WebhookEvent` / `WebhookPing`（API 2.8）
 各 `{ type!, id!, attributes, links(ResourceLinks), relationships? }`。
 
 ### リクエストボディ
@@ -157,6 +168,7 @@
 | `BlueprintCreateRequest` / `BlueprintUpdateRequest` | Blueprint 作成 / 更新 |
 | `Blueprint{Apps,Configurations,Packages,OrgDevices,Users,UserGroups}LinkagesRequest` | リレーション割り当て（`{data:[{type,id}]}`） |
 | `ConfigurationCreateRequest` / `ConfigurationUpdateRequest` | Configuration 作成 / 更新 |
+| `WebhookCreateRequest` / `WebhookUpdateRequest` / `WebhookDeliveryCreateRequest` / `WebhookPingCreateRequest` | Webhook 作成 / 更新、再配信（`relationships.template` に過去の配信）、ping（`relationships.webhook`）（API 2.8） |
 
 ### レスポンスラッパー（JSON:API 定型）
 - 単体: `<Resource>Response` = `{ data(Resource!), links(DocumentLinks!) }`（MdmServer 系は `included([OrgDevice])` を含む）
@@ -199,7 +211,7 @@ attributes = AuditEventCommonAttributes（共通）+ eventData<Event>（イベ�
 
 > `eventDataPropertyKey` が、その時の `attributes` 内に入るイベント固有データのキー名を示す（例 `eventDataDeviceAssignedToServer`）。
 
-### 4.2 AuditEventType（50種）
+### 4.2 AuditEventType（53種）
 `DEVICE_ADDED_TO_ORG`, `DEVICE_REMOVED_FROM_ORG`, `DEVICE_ASSIGNED_TO_SERVER`, `DEVICE_UNASSIGNED_FROM_SERVER`,
 `SUBJECT_HAS_ICLOUD_STORAGE_PURCHASE_ADDED`, `SUBJECT_HAS_ICLOUD_STORAGE_PURCHASE_REMOVED`,
 `SUBJECT_HAS_APPLECARE_PURCHASE_ADDED`, `SUBJECT_HAS_APPLECARE_PURCHASE_REMOVED`, `DEVICE_IS_ERASED`,
@@ -217,6 +229,8 @@ attributes = AuditEventCommonAttributes（共通）+ eventData<Event>（イベ�
 `BATCH_PASSWORD_RESET_INITIATED`, `EXTERNAL_ACCOUNT_INVITED`, `ACCOUNT_IMAGE_SET`, `ACCOUNT_IMAGE_REPLACED`, `ACCOUNT_IMAGE_REMOVED`,
 `IDP_CREATED`, `IDP_UPDATED`, `IDP_DELETED`, `IDP_ACCOUNT_SYNC_ENABLED`, `IDP_ACCOUNT_SYNC_DISABLED`,
 `APPLE_SERVICES_SETTINGS_UPDATED`, `ACCOUNT_PASSWORD_CHANGED`
+
+**📄 API 2.8（2026-11-04）で追加された 3 種**: `WEBHOOK_CREATED`, `WEBHOOK_UPDATED`, `WEBHOOK_DELETED`（カテゴリ `WEBHOOK_ACTIVITY`、対象の種類 `WEBHOOK`）
 
 ### 4.3 イベント固有ペイロード（フィールドを持つもの）
 | eventData 型 | フィールド |
@@ -246,6 +260,7 @@ attributes = AuditEventCommonAttributes（共通）+ eventData<Event>（イベ�
 | `AuditEventIdpUpdated` / `AuditEventIdpDeleted`（API 2.6+） | `vendorName`(AuditEventIdpVendorName) |
 | `AuditEventIdpAccountSyncEnabled` / `AuditEventIdpAccountSyncDisabled`（API 2.6+） | `vendorName`(AuditEventIdpVendorName), `activityId` |
 | `AuditEventAppleServicesSettingsUpdated`（API 2.6+） | `settingsEnabled`([string]), `settingsDisabled`([string]) |
+| `AuditEventWebhookCreated` / `AuditEventWebhookUpdated`（API 2.8+） | `name`, `enabled`（DocC 上は **string**）, `eventTypes`([string]), `url`。`AuditEventWebhookDeleted` はフィールドなし。SDK は `auditevents.Webhook`（共用）。✅ 実機（2026-11-06）: `enabled` は文字列（`"true"`）。`WEBHOOK_UPDATED` には変更した属性だけが入り、ほかは `null` / 空配列。`WEBHOOK_DELETED` は `{}` |
 
 > 上記以外（`DEVICE_IS_ERASED`, `ACCOUNT_ADDED/DELETED`, `EXTERNAL_ACCOUNT_ASSOCIATED/DISASSOCIATED/INVITED`, `DOMAIN_ADDED/REMOVED/VERIFIED`, `API_ACCOUNT_CREATED_WITHOUT_KEY/DELETED`, `ACCOUNT_IMAGE_SET/REPLACED/REMOVED` 等）は eventData にフィールドを持たない（空オブジェクト）か、共通項目のみ（📄 2026-10-08 に DocC で再確認）。
 

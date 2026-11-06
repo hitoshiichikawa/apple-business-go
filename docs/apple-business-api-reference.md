@@ -173,6 +173,22 @@ scope=<business.api | school.api>
 📄 `auditEvents` のクエリ（DocC で確定）: `filter[startTimestamp]`（✅ 必須。無いと 400）/ `filter[endTimestamp]`（ISO8601）, `filter[actorId]`, `filter[subjectId]`, `filter[type]`（いずれも 1 値のみ。`type` は `AuditEventType` の 50 値。✅ API 2.6 追加値 `ROLE_UPDATED` を渡して 200 を確認、demo 2026-10-14）, `fields[auditEvents]`, `limit`（≤1000）, `cursor`。
 > 旧記載の snake_case 名（`start_timestamp` / `actor_id` / `event_type` 等）は ❓二次情報由来の誤りだったため訂正。
 
+### 3.6 Webhooks（📄 API 2.8、2026-11-04 追加）
+| メソッド | パス | 用途 |
+|---|---|---|
+| GET | `/v1/webhooks` | Webhook 一覧（`fields[webhooks]` / `limit`≤1000 / `cursor`） |
+| GET | `/v1/webhooks/{id}` | Webhook 詳細 |
+| POST | `/v1/webhooks` | 作成（201）。`name` / `enabled` / `eventTypes` / `secret` / `url` はすべて必須。`secret` は応答に含まれない |
+| PATCH | `/v1/webhooks/{id}` | 更新（200）。属性はすべて任意 |
+| DELETE | `/v1/webhooks/{id}` | 削除（204） |
+| GET | `/v1/webhooks/{id}/deliveries` | 配信一覧。✅ **`filter[createdDateTimeAtOrAfter]` と `filter[createdDateTimeAtBefore]` は両方必須**（DocC では任意だが、片方でも欠けると 400 `PARAMETER_ERROR.REQUIRED`。未来の日時は 409 `ENTITY_ERROR.ATTRIBUTE.INVALID`「Filter cannot be in the future」。2026-11-06 実機確認）。ほかに `filter[deliveryState]` / `include=event`（`included` に `webhookEvents`） |
+| POST | `/v1/webhookDeliveries` | 再配信（201）。`relationships.template.data` = `{type: webhookDeliveries, id}` |
+| POST | `/v1/webhookPings` | ping（201）。`relationships.webhook.data` = `{type: webhooks, id}`。Apple が `webhookPingCreated` を送る |
+
+📄 受信: Apple は登録した URL に HTTPS POST で通知する。本文は `{data:{type, id, version, attributes, relationships}}` で、`type` は `orgDeviceAttributeChanged` のような camelCase（購読時の `eventTypes` とは表記が異なる）。署名はヘッダ `x-apple-signature: hmacsha256=<hex>`（本文を `secret` で HMAC-SHA256 した 16 進）。再送の方針やタイムスタンプは公式に記載がなく、再配信は `webhookDeliveries` で依頼する。SDK は `webhooks` パッケージ（管理 API）。受信の補助（署名検証・本文の解析）は #60 で対応予定。
+
+✅ 実テナント（2026-11-06、`livetest` の `TestWebhook_Lifecycle`）: 作成 → 取得 → 更新 → ping → 配信一覧（`include=event`）→ 再配信 → 削除（削除後の取得は 404）。名前解決できない URL への ping の配信は `FAILED` で、`errorMessage` に Apple の送信プロキシのエラーが入り、`response` は無い。ping の ID は、配信が指すイベントの ID と同じだった。再配信は `PENDING`・`redelivery=true` の新しい配信として返る。監査イベントは `WEBHOOK_CREATED` / `WEBHOOK_UPDATED` / `WEBHOOK_DELETED`（カテゴリ `WEBHOOK_ACTIVITY`、`subjectType=WEBHOOK`、`subjectId`＝Webhook の ID）が記録された。
+
 ---
 
 ## 4. 主要エンティティのフィールド定義

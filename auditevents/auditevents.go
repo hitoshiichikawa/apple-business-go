@@ -221,8 +221,21 @@ const (
 	IDPProtocolSAML = "SAML"
 )
 
+// Event-specific payload added in Apple Business API 2.8 (2026-11-04; per the DocC),
+// shared by WEBHOOK_CREATED and WEBHOOK_UPDATED (AuditEventWebhookCreated /
+// AuditEventWebhookUpdated). WEBHOOK_DELETED carries no event-specific fields.
+// Enabled is a string such as "true", as in the DocC and the live API. In
+// WEBHOOK_UPDATED only the changed attributes are set; the others are null or
+// empty (observed 2026-11-06).
+type Webhook struct {
+	Name       string   `json:"name,omitempty"`
+	Enabled    string   `json:"enabled,omitempty"` // "true" / "false", not a boolean
+	EventTypes []string `json:"eventTypes,omitempty"`
+	URL        string   `json:"url,omitempty"`
+}
+
 // Values of AuditEventCategory (Attributes.Category). ACCESS_MANAGEMENT was
-// added in API 2.6. Note: the live API has been observed returning
+// added in API 2.6 and WEBHOOK_ACTIVITY in API 2.8. Note: the live API has been observed returning
 // "DEVICE_ACTIVITY" for DEVICE_ASSIGNED_TO_SERVER, which is not in the DocC
 // enumeration; treat unknown values as opaque strings.
 const (
@@ -232,10 +245,11 @@ const (
 	CategoryPurchasing       = "PURCHASING"
 	CategoryDeviceManagement = "DEVICE_MANAGEMENT"
 	CategoryAccessManagement = "ACCESS_MANAGEMENT"
+	CategoryWebhookActivity  = "WEBHOOK_ACTIVITY"
 )
 
 // Values of AuditEventSubjectType (Attributes.SubjectType). ROLE / IDP /
-// INVITATION were added in API 2.6.
+// INVITATION were added in API 2.6, and WEBHOOK in API 2.8.
 const (
 	SubjectOrganization            = "ORGANIZATION"
 	SubjectUser                    = "USER"
@@ -249,6 +263,7 @@ const (
 	SubjectRole                    = "ROLE"
 	SubjectIDP                     = "IDP"
 	SubjectInvitation              = "INVITATION"
+	SubjectWebhook                 = "WEBHOOK"
 )
 
 // Values of AuditEventActorType (Attributes.ActorType).
@@ -264,8 +279,8 @@ const (
 	OutcomeFailure = "FAILURE"
 )
 
-// All AuditEventType values (50 in total; the last 17 were added in Apple Business API 2.6,
-// 2026-09-24). Compare against Attributes.Type to branch on the event; filter[type] accepts one of them.
+// All AuditEventType values (53 in total; 17 were added in Apple Business API 2.6 (2026-09-24)
+// and the last 3 in API 2.8 (2026-11-04)). Compare against Attributes.Type to branch on the event; filter[type] accepts one of them.
 // For the eventData payload of each type, see docs/apple-business-api-datatypes.md §4.3.
 const (
 	TypeDeviceAddedToOrg                       = "DEVICE_ADDED_TO_ORG"
@@ -320,6 +335,11 @@ const (
 	TypeIDPAccountSyncDisabled       = "IDP_ACCOUNT_SYNC_DISABLED"
 	TypeAppleServicesSettingsUpdated = "APPLE_SERVICES_SETTINGS_UPDATED"
 	TypeAccountPasswordChanged       = "ACCOUNT_PASSWORD_CHANGED"
+
+	// Added in Apple Business API 2.8 (2026-11-04).
+	TypeWebhookCreated = "WEBHOOK_CREATED"
+	TypeWebhookUpdated = "WEBHOOK_UPDATED"
+	TypeWebhookDeleted = "WEBHOOK_DELETED"
 )
 
 // Service exposes the audit-events endpoint. Construct with New.

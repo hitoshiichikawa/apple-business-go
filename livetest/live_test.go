@@ -37,6 +37,7 @@ import (
 	"github.com/hitoshiichikawa/apple-business-go/devices"
 	"github.com/hitoshiichikawa/apple-business-go/orgunits"
 	"github.com/hitoshiichikawa/apple-business-go/people"
+	"github.com/hitoshiichikawa/apple-business-go/webhooks"
 )
 
 var (
@@ -469,6 +470,165 @@ func TestMdmServer_CertAlgorithm(t *testing.T) {
 			t.Errorf("DeleteMdmServer: %v", err)
 		}
 	})
+}
+
+// ---------------------------------------------------------------------------
+// Webhooks (API 2.8) — テスト用の Webhook を作成し、最後に必ず削除する
+// ---------------------------------------------------------------------------
+
+// TestWebhook_Lifecycle は作成→取得→更新→ping→配信一覧→再配信→削除を確認し、
+// 作成・更新・削除の監査イベントを記録する。URL は名前解決できない .invalid ドメインに
+// するため通知は外部に届かず、ping の配信は FAILED（errorMessage 付き）になる想定。
+// 作成時に URL が検証されるかもここで観測する。
+func TestWebhook_Lifecycle(t *testing.T) {
+	c := mustClient(t)
+	svc := webhooks.New(c)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	t.Cleanup(cancel)
+
+	name := testName()
+	start := time.Now().Add(-time.Minute)
+	wh, err := svc.Create(ctx, webhooks.CreateInput{
+		Name:       name,
+		URL:        "https://apple-business-go-livetest.invalid/webhook",
+		Secret:     randHex(32),
+		EventTypes: []string{webhooks.EventTypeOrgDeviceAttributeChanged},
+		Enabled:    true,
+	})
+	if applebusiness.IsForbidden(err) {
+		t.Skipf("webhooks.Create: 403 (permission) — %v", err)
+	}
+	if err != nil {
+		t.Fatalf("webhooks.Create: %v", err)
+	}
+	// 下の明示的な Delete に到達しなかった場合の保険。
+	t.Cleanup(func() { bestEffortDelete(func(ctx context.Context) error { return svc.Delete(ctx, wh.ID) }) })
+	t.Logf("created webhook %s (enabled=%v)", wh.ID, wh.Attributes.Enabled)
+
+	got, err := svc.Get(ctx, wh.ID)
+	if err != nil {
+		t.Fatalf("webhooks.Get: %v", err)
+	}
+	if got.Attributes.Name != name || !got.Attributes.Enabled || len(got.Attributes.EventTypes) != 1 ||
+		got.Attributes.EventTypes[0] != webhooks.EventTypeOrgDeviceAttributeChanged {
+		t.Errorf("Get returned %+v", got.Attributes)
+	}
+
+	newName := name + "-upd"
+	up, err := svc.Update(ctx, wh.ID, webhooks.UpdateInput{Name: &newName})
+	if err != nil {
+		t.Fatalf("webhooks.Update: %v", err)
+	}
+	if up.Attributes.Name != newName || !up.Attributes.Enabled {
+		t.Errorf("Update returned %+v", up.Attributes)
+	}
+
+	pingID, err := svc.Ping(ctx, wh.ID)
+	if err != nil {
+		t.Fatalf("webhooks.Ping: %v", err)
+	}
+	t.Logf("ping %s sent", pingID)
+
+	// 配信が記録され、すべて PENDING 以外になるまで最大 60 秒待つ。作成日時の範囲は API で必須で、
+	// 未来の日時は 409 になるため終わりは現在時刻（ゼロ値）にする。時計のずれで直近の配信を
+	// 取りこぼしても、繰り返し取得するうちに拾える。
+	var list *webhooks.DeliveryList
+	for deadline := time.Now().Add(60 * time.Second); ; {
+		list, err = svc.Deliveries(ctx, wh.ID, start, time.Time{}, webhooks.DeliveryFilter{IncludeEvents: true}, nil)
+		if err != nil {
+			t.Fatalf("webhooks.Deliveries: %v", err)
+		}
+		if deliveriesSettled(list) || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(5 * time.Second)
+	}
+	for _, d := range list.Deliveries {
+		ev, included := list.Event(d)
+		status := 0
+		if d.Attributes.Response != nil {
+			status = d.Attributes.Response.HTTPStatusCode
+		}
+		t.Logf("delivery %s: state=%s redelivery=%v httpStatus=%d error=%q event=%s (included=%v isPing=%v)",
+			d.ID, d.Attributes.DeliveryState, d.Attributes.Redelivery, status, d.Attributes.ErrorMessage,
+			d.EventID(), included, ev.Attributes.IsPingEvent)
+	}
+	if len(list.Deliveries) == 0 {
+		t.Errorf("no delivery was recorded for the ping within 60s")
+	} else {
+		rd, err := svc.Redeliver(ctx, list.Deliveries[0].ID)
+		if err != nil {
+			t.Errorf("webhooks.Redeliver: %v", err)
+		} else {
+			t.Logf("redelivery %s: state=%s redelivery=%v", rd.ID, rd.Attributes.DeliveryState, rd.Attributes.Redelivery)
+		}
+	}
+
+	if err := svc.Delete(ctx, wh.ID); err != nil {
+		t.Fatalf("webhooks.Delete: %v", err)
+	}
+	if _, err := svc.Get(ctx, wh.ID); !applebusiness.IsNotFound(err) {
+		t.Errorf("Get after Delete: want 404, got %v", err)
+	}
+
+	logWebhookAuditEvents(ctx, t, c, start, wh.ID, name)
+}
+
+// deliveriesSettled は配信が 1 件以上あり、すべて PENDING 以外になったかを返す。
+func deliveriesSettled(l *webhooks.DeliveryList) bool {
+	if len(l.Deliveries) == 0 {
+		return false
+	}
+	for _, d := range l.Deliveries {
+		if d.Attributes.DeliveryState == webhooks.DeliveryStatePending {
+			return false
+		}
+	}
+	return true
+}
+
+// logWebhookAuditEvents は対象 Webhook の WEBHOOK_* 監査イベントを探し、eventData の生 JSON を
+// 記録する。DocC では AuditEventWebhookCreated / Updated の enabled が string 型なので、実際の型を
+// ここで確かめる（auditevents.Webhook に decode できなければ失敗にする）。監査イベントは反映に
+// 時間がかかることがあるため、見つからないこと自体は失敗にしない。
+func logWebhookAuditEvents(ctx context.Context, t *testing.T, c *applebusiness.Client, start time.Time, webhookID, namePrefix string) {
+	t.Helper()
+	found := map[string]bool{
+		auditevents.TypeWebhookCreated: false,
+		auditevents.TypeWebhookUpdated: false,
+		auditevents.TypeWebhookDeleted: false,
+	}
+	for deadline := time.Now().Add(90 * time.Second); ; {
+		// filter[endTimestamp] も実機では必須（ゼロ値で省略すると 400。2026-11-06）。
+		events, err := auditevents.New(c).ListRange(ctx, start, time.Now(), url.Values{"limit": {"1000"}})
+		if err != nil {
+			t.Logf("auditevents.ListRange: %v", err)
+			return
+		}
+		for _, ev := range events {
+			a := ev.Attributes
+			done, isWebhook := found[a.Type]
+			if !isWebhook || done || (a.SubjectID != webhookID && !strings.HasPrefix(a.SubjectName, namePrefix)) {
+				continue
+			}
+			found[a.Type] = true
+			for k, raw := range a.EventData {
+				t.Logf("audit %s (category=%s subjectType=%s subjectId=%s): %s=%s", a.Type, a.Category, a.SubjectType, a.SubjectID, k, raw)
+			}
+			if a.Type != auditevents.TypeWebhookDeleted {
+				var w auditevents.Webhook
+				if err := a.Payload(&w); err != nil {
+					t.Errorf("decode %s payload into auditevents.Webhook: %v", a.Type, err)
+				}
+			}
+		}
+		if (found[auditevents.TypeWebhookCreated] && found[auditevents.TypeWebhookUpdated] && found[auditevents.TypeWebhookDeleted]) ||
+			time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(10 * time.Second)
+	}
+	t.Logf("WEBHOOK_* audit events found for %s: %v", webhookID, found)
 }
 
 // ---------------------------------------------------------------------------
