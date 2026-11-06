@@ -198,6 +198,20 @@ func TestReads_SucceedOrPermission403(t *testing.T) {
 			t.Errorf("filter[serialNumber]=%s returned %d device(s): %v", first.SerialNumber, len(got), ids)
 		}
 
+		// 複数値はカンマ区切り（%2C にエンコードされる）の 1 パラメータで送る。2 台を指定して 2 台返ること。
+		if len(seed) >= 2 {
+			two := []string{seed[0].Attributes.SerialNumber, seed[1].Attributes.SerialNumber}
+			got, err = firstPage(devices.DeviceFilter{SerialNumbers: two})
+			if err != nil {
+				t.Fatalf("filter[serialNumber] (2 values): %v", err)
+			}
+			if len(got) != 2 {
+				t.Errorf("filter[serialNumber] with 2 comma-separated values returned %d device(s)", len(got))
+			} else {
+				t.Logf("filter[serialNumber] with 2 comma-separated values: 2 device(s)")
+			}
+		}
+
 		got, err = firstPage(devices.DeviceFilter{ProductFamilies: []string{first.ProductFamily}})
 		if err != nil {
 			t.Fatalf("filter[productFamily]=%s: %v", first.ProductFamily, err)
@@ -208,6 +222,33 @@ func TestReads_SucceedOrPermission403(t *testing.T) {
 			}
 		}
 		t.Logf("filter[productFamily]=%s: %d device(s) on the first page", first.ProductFamily, len(got))
+
+		// 1 台目と別のファミリでも、返った端末がすべてそのファミリであること。
+		// Apple がフィルタを無視して全件を返していれば、ここで 1 台目のファミリが混ざって失敗する。
+		other := devices.ProductFamilyMac
+		if first.ProductFamily == devices.ProductFamilyMac {
+			other = devices.ProductFamilyIPhone
+		}
+		got, err = firstPage(devices.DeviceFilter{ProductFamilies: []string{other}})
+		if err != nil {
+			t.Fatalf("filter[productFamily]=%s: %v", other, err)
+		}
+		for _, d := range got {
+			if d.Attributes.ProductFamily != other {
+				t.Errorf("filter[productFamily]=%s returned %s with productFamily %q", other, d.ID, d.Attributes.ProductFamily)
+			}
+		}
+		t.Logf("filter[productFamily]=%s: %d device(s) on the first page", other, len(got))
+
+		// 未来の日時以降に追加された端末は無いはず（範囲指定が無視されていれば全件が返る）。
+		future := time.Now().AddDate(10, 0, 0).Truncate(time.Second)
+		got, err = firstPage(devices.DeviceFilter{AddedToOrgDateTime: devices.TimeFilter{GTE: future}})
+		if err != nil {
+			t.Fatalf("filter[addedToOrgDateTime][GTE] (future): %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("filter[addedToOrgDateTime][GTE]=%s (future) returned %d device(s)", future.Format(time.RFC3339), len(got))
+		}
 
 		added, perr := time.Parse(time.RFC3339, first.AddedToOrgDateTime)
 		if perr != nil {
